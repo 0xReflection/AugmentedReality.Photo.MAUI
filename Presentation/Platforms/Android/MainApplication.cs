@@ -11,6 +11,6 @@ namespace Presentation
         {
         }
 
-        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+        protected override MauiApp CreateMauiApp() => Presentation.App.MauiProgram.CreateMauiApp();
     }
 }
