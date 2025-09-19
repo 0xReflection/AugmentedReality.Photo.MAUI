@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.UseCases
+namespace UseCases.UseCases
 {
     public class ScanQrUseCase
     {

@@ -90,12 +90,24 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <AndroidResource Remove="Platforms\MacCatalyst\**" />
-	  <Compile Remove="Platforms\MacCatalyst\**" />
-	  <EmbeddedResource Remove="Platforms\MacCatalyst\**" />
-	  <MauiCss Remove="Platforms\MacCatalyst\**" />
-	  <MauiXaml Remove="Platforms\MacCatalyst\**" />
-	  <None Remove="Platforms\MacCatalyst\**" />
+	  <AndroidResource Remove="Platforms\Android\Java\**" />
+	  <Compile Remove="Platforms\Android\Java\**" />
+	  <EmbeddedResource Remove="Platforms\Android\Java\**" />
+	  <MauiCss Remove="Platforms\Android\Java\**" />
+	  <MauiXaml Remove="Platforms\Android\Java\**" />
+	  <None Remove="Platforms\Android\Java\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <AndroidResource Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Domain\Domain.csproj" />
+		<ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
+		<ProjectReference Include="..\AppUseCase\AppUseCase.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+	  <None Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -107,10 +119,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.9" />
 	</ItemGroup>
 	<ItemGroup>
-  		<AndroidJavaSource Include="Platforms/Android/Java/com/exmaple/ar/ArActivity.java" />
-	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Platforms\Android\Java\" />
+	  <Folder Include="Platforms\Android\Resources\Layouts\" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
 	  <PackageReference Include="CommunityToolkit.Maui">
