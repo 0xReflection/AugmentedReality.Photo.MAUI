@@ -28,81 +28,16 @@
             <Setter Property="Color" Value="#eee"/>
             <Setter Property="Margin" Value="0,10,0,0"/>
         </Style>
-        <!--<DataTemplate x:DataType="models:Article" x:Key="ArticleTemplate">
-            <StackLayout Orientation="Vertical" Margin="20,0,0,0" WidthRequest="300" HeightRequest="260">
-                <StackLayout.GestureRecognizers>
-                    <TapGestureRecognizer CommandParameter="{Binding .}" Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:HomeViewModel}}, Path=TappedCommand}"/>
-                </StackLayout.GestureRecognizers>
-                <Frame Padding="0" IsClippedToBounds="True" BorderColor="Transparent">
-                    <Image Source="{Binding ImageURL}" HeightRequest="180" WidthRequest="300" Aspect="AspectFill" />
-                </Frame>
-                <Label Text="{Binding Title}" Margin="0,4,0,0" FontSize="18" FontFamily="PoppinsSemibold" MaxLines="2"/>
-                <StackLayout Orientation="Horizontal" Spacing="4">
-                    <Label Text="{Binding Category}" TextColor="{StaticResource Primary}"/>
-                    <Label Text="·" FontAttributes="Bold" TextColor="{StaticResource Gray200}"/>
-                    <Label Text="{Binding Time}" TextColor="{StaticResource Gray200}"/>
-                </StackLayout>
-            </StackLayout>
-        </DataTemplate>-->
     </ContentPage.Resources>
-    <ScrollView>
-        <Grid ColumnDefinitions="*,*,*" RowDefinitions="*,30">
-            <toolkit:CameraView 
-            Grid.ColumnSpan="3" 
-            Grid.Row="0" />
-        </Grid>
-        <!--<VerticalStackLayout>
-            <StackLayout Style="{StaticResource HeaderStack}">
-                <Label Text="Popular tags" Style="{StaticResource SectionHeading}"/>
-                <Label Text="Show All" Style="{StaticResource ShowAll}"/>
-            </StackLayout>
+    <Grid RowDefinitions="*,40">
+        <toolkit:CameraView x:Name="Camera"
+                            Grid.Row="0"
+                            ZoomFactor="{Binding Zoom}" />
 
-            <FlexLayout 
-                        Wrap="Wrap"
-                        Margin="20,0">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate>
-                        <Frame BackgroundColor="#f2f2f2"
-                               BorderColor="Transparent"
-                               CornerRadius="4"
-                               Padding="8,2"
-                               Margin="0,0,4,10">
-                            <Label Text="{Binding .}" FontFamily="Poppins" VerticalOptions="Center"/>
-                        </Frame>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </FlexLayout>
-
-            <BoxView />
-
-            <StackLayout Style="{StaticResource HeaderStack}">
-                <Label Text="Latest news" Style="{StaticResource SectionHeading}"/>
-                <Label Text="Show All" Style="{StaticResource ShowAll}"/>
-            </StackLayout>
-            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-                <StackLayout Orientation="Horizontal" Spacing="10"/>
-            </ScrollView>
-
-            <BoxView />
-
-            <StackLayout Style="{StaticResource HeaderStack}">
-                <Label Text="Recommended for you" Style="{StaticResource SectionHeading}"/>
-                <Label Text="Show All" Style="{StaticResource ShowAll}"/>
-            </StackLayout>
-            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-                <StackLayout Orientation="Horizontal" Spacing="10"  />
-            </ScrollView>
-
-            <BoxView />
-
-            <StackLayout Style="{StaticResource HeaderStack}">
-                <Label Text="Popular articles" Style="{StaticResource SectionHeading}"/>
-                <Label Text="Show All" Style="{StaticResource ShowAll}"/>
-            </StackLayout>
-            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-                <StackLayout Orientation="Horizontal" Spacing="10"  />
-            </ScrollView>
-        </VerticalStackLayout>-->
-    </ScrollView>
+        <Button Grid.Row="1"
+                Text="Сделать фото"
+                Command="{Binding CaptureImageCommand}"
+                CommandParameter="{x:Reference Camera}" />
+    </Grid>
 </ContentPage>
 
