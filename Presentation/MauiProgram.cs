@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Presentation.ViewModel;
+using CommunityToolkit.Maui;
+using Presentation.Views;
 
 namespace Presentation
 {
@@ -8,10 +10,10 @@ namespace Presentation
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
+//#pragma warning disable MCT001 // `.UseMauiCommunityToolkit()` Not Found on MauiAppBuilder
             builder
-                
-                
                 .UseMauiApp<App>()
+                .UseMauiCommunityToolkitCamera()
                 .RegisterViewModels()
                 .ConfigureFonts(fonts =>
                 {
@@ -24,9 +26,11 @@ namespace Presentation
                     fonts.AddFont("MaterialIconsOutlined-Regular.otf", "Material");
 
                 });
+//#pragma warning restore MCT001 // `.UseMauiCommunityToolkit()` Not Found on MauiAppBuilder
 
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
+            //builder.Services.AddSingleton<ICameraService, CameraService>();
 #endif
 
             return builder.Build();

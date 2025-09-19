@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 namespace Domain.Interfaces
 {
-    public interface IArService { Task LaunchArAsync(CharacterModel character); }
-
+    public interface IStorageService
+    {
+        Task<string> SaveAsync(Photo photo);
+    }
 }

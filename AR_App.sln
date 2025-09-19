@@ -6,10 +6,22 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "Domain\Domain.csproj", "{341C0317-798D-4807-AD98-807B92F452DD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\Application.csproj", "{369F9966-1555-46EF-9532-96898DF5B602}"
+	ProjectSection(ProjectDependencies) = postProject
+		{341C0317-798D-4807-AD98-807B92F452DD} = {341C0317-798D-4807-AD98-807B92F452DD}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "Infrastructure\Infrastructure.csproj", "{EB2EAEDC-8E4D-4A44-8BFF-CCC6A52AA8C9}"
+	ProjectSection(ProjectDependencies) = postProject
+		{341C0317-798D-4807-AD98-807B92F452DD} = {341C0317-798D-4807-AD98-807B92F452DD}
+		{369F9966-1555-46EF-9532-96898DF5B602} = {369F9966-1555-46EF-9532-96898DF5B602}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Presentation", "Presentation\Presentation.csproj", "{7A4B8E67-BB5F-4708-9F96-8A66BF33239E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{341C0317-798D-4807-AD98-807B92F452DD} = {341C0317-798D-4807-AD98-807B92F452DD}
+		{369F9966-1555-46EF-9532-96898DF5B602} = {369F9966-1555-46EF-9532-96898DF5B602}
+		{EB2EAEDC-8E4D-4A44-8BFF-CCC6A52AA8C9} = {EB2EAEDC-8E4D-4A44-8BFF-CCC6A52AA8C9}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

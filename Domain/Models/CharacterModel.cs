@@ -6,7 +6,17 @@ using System.Threading.Tasks;
 
 namespace Domain.Models
 {
-    public sealed class CharacterModel
+    public class CharacterModel
     {
+        public string Name { get; }
+        public string ModelPath { get; }
+        public string Effect { get; }
+
+        public CharacterModel(string name, string modelPath, string effect)
+        {
+            Name = name;
+            ModelPath = modelPath;
+            Effect = effect;
+        }
     }
 }

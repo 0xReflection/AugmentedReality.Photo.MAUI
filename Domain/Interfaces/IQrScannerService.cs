@@ -6,7 +6,5 @@ using System.Threading.Tasks;
 
 namespace Domain.Interfaces
 {
-    internal class IQrScannerService
-    {
-    }
+    public interface IQrService { Task<string?> ScanAsync(); }
 }

@@ -1,12 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using CommunityToolkit.Maui.Media;
+using Domain.Interfaces;
+using Domain.Models;
 
 namespace Infrastructure.Services
 {
-    internal class CameraService
+    public class CameraService : ICameraService
     {
+        public async Task<Photo?> CaptureAsync()
+        {
+            var file = await MediaPicker.CapturePhotoAsync();
+            return file == null ? null : new Photo(file.FullPath);
+        }
     }
 }
+
+
