@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-
 namespace AppUseCase.UseCases
 {
     public class CapturePhotoUseCase
@@ -16,16 +15,14 @@ namespace AppUseCase.UseCases
 
         public CapturePhotoUseCase(ICameraService camera, IStorageService storage)
         {
-            _camera = camera ?? throw new ArgumentNullException(nameof(camera));
-            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            _camera = camera; _storage = storage;
         }
 
-        public async Task<Photo?> ExecuteAsync(CancellationToken ct = default)
+        public async Task<Photo?> ExecuteAsync()
         {
-            var photo = await _camera.CaptureAsync(ct);
+            var photo = await _camera.CaptureAsync();
             if (photo == null) return null;
-
-            photo.FilePath = await _storage.SaveAsync(photo);
+            await _storage.SaveAsync(photo);
             return photo;
         }
     }

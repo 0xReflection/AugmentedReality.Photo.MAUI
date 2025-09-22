@@ -37,7 +37,6 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
 		<EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-ios|AnyCPU'">
@@ -89,9 +88,7 @@
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
-	<ItemGroup>
-		<MauiAsset Include="Resources\Raw\**" />
-	</ItemGroup>
+
 	<ItemGroup>
 	  <AndroidResource Remove="Platforms\Android\Java\**" />
 	  <Compile Remove="Platforms\Android\Java\**" />
@@ -100,14 +97,9 @@
 	  <MauiXaml Remove="Platforms\Android\Java\**" />
 	  <None Remove="Platforms\Android\Java\**" />
 	</ItemGroup>
-	
 
 	<ItemGroup>
 	  <AndroidResource Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Compile Remove="Platforms\Android\Services\ObjectDetectionService.cs" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Domain\Domain.csproj" />
@@ -125,13 +117,9 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.110" />
 		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.110" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.9" />
-		<PackageReference Include="SkiaSharp" Version="3.119.0" />
-		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.0" />
-		<PackageReference Include="SkiaSharp.Views.Maui.Core" Version="3.119.0" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Platforms\Android\Resources\Layouts\" />
-	  <Folder Include="Platforms\Android\Services\" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
 	  <PackageReference Include="CommunityToolkit.Maui">
@@ -139,15 +127,6 @@
 	  </PackageReference>
 	  <PackageReference Include="CommunityToolkit.Maui.Core">
 	    <Version>12.2.0</Version>
-	  </PackageReference>
-	  <PackageReference Include="Xamarin.AndroidX.Camera.Lifecycle">
-	    <Version>1.4.2.3</Version>
-	  </PackageReference>
-	  <PackageReference Include="Xamarin.TensorFlow.Lite">
-	    <Version>2.16.1.7</Version>
-	  </PackageReference>
-	  <PackageReference Include="Xamarin.TensorFlow.Lite.Gpu">
-	    <Version>2.16.1.7</Version>
 	  </PackageReference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0-ios'">
@@ -167,16 +146,9 @@
 	  </PackageReference>
 	</ItemGroup>
 	<ItemGroup>
-	  <Compile Update="Services\ObjectDetectionService.cs">
-	    <ExcludeFromCurrentConfiguration>false</ExcludeFromCurrentConfiguration>
-	  </Compile>
-	</ItemGroup>
-	<ItemGroup>
-	  <MauiXaml Update="Views\CharacterPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
 	  <MauiXaml Update="Views\MainPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>
+
 </Project>
