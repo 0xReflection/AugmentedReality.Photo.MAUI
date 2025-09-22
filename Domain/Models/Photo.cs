@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SkiaSharp;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,7 +9,9 @@ namespace Domain.Models
 {
     public class Photo
     {
-        public string FilePath { get; }
-        public Photo(string filePath) => FilePath = filePath;
+        public SKBitmap Bitmap { get; }
+        public string? FilePath { get; set; } // Добавляем путь для сохранения
+
+        public Photo(SKBitmap bitmap) => Bitmap = bitmap;
     }
 }

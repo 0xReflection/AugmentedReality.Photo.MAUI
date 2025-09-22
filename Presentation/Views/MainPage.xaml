@@ -3,41 +3,175 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="clr-namespace:Presentation.ViewModel"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
+             xmlns:converters="clr-namespace:Presentation.Converters"
              x:Class="Presentation.Views.MainPage"
-             Title="MainPage">
-
+             Background="black">
     <ContentPage.Resources>
-        <Style TargetType="StackLayout" x:Key="HeaderStack">
-            <Setter Property="Margin" Value="20,16,20,14"/>
-            <Setter Property="Orientation" Value="Horizontal"/>
-            <Setter Property="Padding" Value="20,0"/>
+        
+
+        <converters:ConfidenceToColorConverter x:Key="ConfidenceColorConverter"/>
+
+        <converters:DetectionButtonConverter x:Key="DetectionButtonConverter"/>
+        <Style TargetType="Label">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontFamily" Value="Poppins"/>
+            <Setter Property="VerticalOptions" Value="Center"/>
         </Style>
-        <Style TargetType="Label" x:Key="SectionHeading">
-            <Setter Property="FontFamily" Value="NotoSerifBold"/>
-            <Setter Property="FontSize" Value="20"/>
-            <Setter Property="HorizontalOptions" Value="StartAndExpand"/>
-        </Style>
-        <Style TargetType="Label" x:Key="ShowAll">
-            <Setter Property="HorizontalOptions" Value="End"/>
+
+        <Style TargetType="Button">
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontFamily" Value="Poppins"/>
+            <Setter Property="CornerRadius" Value="25"/>
+            <Setter Property="HeightRequest" Value="50"/>
             <Setter Property="FontSize" Value="16"/>
-            <Setter Property="TextColor" Value="{StaticResource Primary}"/>
-            <Setter Property="VerticalOptions" Value="End"/>
+            <Setter Property="Margin" Value="0,5"/>
         </Style>
-        <Style TargetType="BoxView">
-            <Setter Property="HeightRequest" Value="1"/>
-            <Setter Property="Color" Value="#eee"/>
-            <Setter Property="Margin" Value="0,10,0,0"/>
+
+        <Style TargetType="Frame">
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="HasShadow" Value="True"/>
+            <Setter Property="CornerRadius" Value="15"/>
         </Style>
     </ContentPage.Resources>
-    <Grid RowDefinitions="*,40">
-        <toolkit:CameraView x:Name="Camera"
-                            Grid.Row="0"
-                            ZoomFactor="{Binding Zoom}" />
 
-        <Button Grid.Row="1"
-                Text="Сделать фото"
-                Command="{Binding CaptureImageCommand}"
-                CommandParameter="{x:Reference Camera}" />
+    <Grid>
+        <!-- Камера -->
+        <toolkit:CameraView x:Name="CameraView"
+                            HorizontalOptions="FillAndExpand"
+                            VerticalOptions="FillAndExpand"
+                            IsEnabled="{Binding IsDetecting}"/>
+
+        <!-- Overlay для отображения детекций -->
+        <skia:SKCanvasView x:Name="DetectionOverlay"
+                           PaintSurface="OnDetectionPaintSurface"
+                           IgnorePixelScaling="True"
+                           IsVisible="{Binding IsDetecting}"
+                           InputTransparent="True"/>
+
+        <!-- Верхняя панель информации -->
+        <Frame VerticalOptions="Start"
+               HorizontalOptions="Fill"
+               Margin="20"
+               BackgroundColor="#80000000">
+
+            <VerticalStackLayout Spacing="8">
+                <!-- Статус -->
+                <Label Text="{Binding DetectionStatus}"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center"
+                       LineBreakMode="WordWrap"/>
+
+                <!-- Качество детекции -->
+                <Label Text="{Binding DetectionQuality}"
+                       FontSize="14"
+                       HorizontalOptions="Center"
+                       IsVisible="{Binding IsPersonDetected}"/>
+
+                <!-- Показатели производительности -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Label Text="{Binding CurrentFps, StringFormat='FPS: {0:F1}'}"
+                           FontSize="12"/>
+
+                    <Label Text="{Binding TargetFps}"
+                           FontSize="11"
+                           TextColor="LightGray"
+                           HorizontalOptions="End"
+                           Grid.Column="1"/>
+                </Grid>
+
+                <!-- Время обработки -->
+                <Label Text="{Binding ProcessingTime, StringFormat='Обработка: {0}'}"
+                       FontSize="11"
+                       TextColor="LightGray"
+                       HorizontalOptions="Center"/>
+
+                <!-- Прогресс бар уверенности -->
+                <ProgressBar Progress="{Binding DetectionConfidence}"
+                             ProgressColor="{Binding DetectionConfidence, Converter={StaticResource ConfidenceColorConverter}}"
+                             HeightRequest="4"
+                             IsVisible="{Binding IsPersonDetected}"/>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- Нижняя панель управления -->
+        <Frame VerticalOptions="End"
+               HorizontalOptions="Fill"
+               Margin="20"
+               BackgroundColor="#80000000">
+
+            <VerticalStackLayout Spacing="12">
+                <!-- Основная кнопка управления -->
+                <Button Text="{Binding IsDetecting, Converter={StaticResource DetectionButtonConverter}}"
+                        Command="{Binding ToggleDetectionCommand}"
+                        BackgroundColor="{Binding IsDetecting, Converter={StaticResource StatusColorConverter}}"
+                        FontAttributes="Bold"/>
+
+                <!-- Контроль FPS (только при активной детекции) -->
+                <Grid IsVisible="{Binding IsDetecting}" 
+                      RowSpacing="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Label Text="Настройка FPS:"
+                           FontSize="12"
+                           TextColor="LightGray"/>
+
+                    <Grid Grid.Row="1" ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Slider Value="{Binding TargetFps}"
+                                Minimum="5"
+                                Maximum="30"
+                                ThumbColor="#4CAF50"
+                                ValueChanged="OnTargetFpsChanged"/>
+
+                        <Label Text="{Binding TargetFps}"
+                               FontSize="12"
+                               TextColor="White"
+                               Grid.Column="1"
+                               MinimumWidthRequest="30"/>
+                    </Grid>
+                </Grid>
+
+                <!-- Статистика -->
+                <Grid IsVisible="{Binding IsDetecting}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Label Text="{Binding DetectionConfidence}"
+                           FontSize="11"
+                           TextColor="LightGray"
+                           HorizontalOptions="Start"/>
+
+                    <Label Text="{Binding IsPersonDetected, Converter={StaticResource DetectionStatusConverter}}"
+                           FontSize="11"
+                           TextColor="{Binding IsPersonDetected, Converter={StaticResource StatusColorConverter}}"
+                           HorizontalOptions="End"
+                           Grid.Column="1"/>
+                </Grid>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- Индикатор загрузки -->
+        <ActivityIndicator IsRunning="{Binding IsDetecting}"
+                           IsVisible="{Binding IsDetecting}"
+                           Color="White"
+                           BackgroundColor="#80000000"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"/>
     </Grid>
 </ContentPage>
-
