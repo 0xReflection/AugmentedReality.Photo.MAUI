@@ -7,23 +7,12 @@
     xmlns:Views="clr-namespace:Presentation.Views"
     Shell.FlyoutBehavior="Disabled"
     Title="AR Application">
-
-    <!--<ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />-->
     <TabBar>
-        <Tab x:Name="HomeTab">
+        <Tab x:Name="HomeTab" Icon="home.png">
             <ShellContent ContentTemplate="{DataTemplate Views:MainPage}" Route="MainPage"/>
         </Tab>
-        <!--<Tab x:Name="SectionsTab">
-        <ShellContent ContentTemplate="{DataTemplate views:SectionsPage}" Route="sections"/>
-    </Tab>
-    <Tab x:Name="BookmarksTab">
-        <ShellContent ContentTemplate="{DataTemplate views:BookmarksPage}" Route="bookmarks"/>
-    </Tab>
-    <Tab x:Name="ProfileTab">
-        <ShellContent ContentTemplate="{DataTemplate views:ProfilePage}" Route="profile"/>
-    </Tab>-->
+        <Tab x:Name="CharacterTab" Icon="categories.png">
+            <ShellContent ContentTemplate="{DataTemplate Views:CharacterPage}" Route="CharacterPage"/>
+        </Tab>
     </TabBar>
 </Shell>
