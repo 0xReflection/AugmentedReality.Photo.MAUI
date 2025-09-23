@@ -421,6 +421,7 @@ using SkiaSharp;
 #if ANDROID
 using Xamarin.TensorFlow.Lite;
 using Java.Nio;
+using Android.App;
 #endif
 using Domain.Models;
 using Domain.Interfaces;
@@ -447,7 +448,7 @@ namespace Presentation.Services
 
         private readonly string[] _labels;
         private const int InputSize = 224;
-        private const float ConfidenceThreshold = 0.6f; 
+        private const float ConfidenceThreshold = 0.6f;
         private const int NumClasses = 1001;
 
         public ObjectDetectionService(ILogger<ObjectDetectionService> logger)
@@ -480,8 +481,8 @@ namespace Presentation.Services
                 _modelBuffer.Rewind();
 
                 var options = new Interpreter.Options();
-                options.SetNumThreads(2);      // многопоток
-                options.SetUseNNAPI(false);    // ОТКЛЮЧАЕМ NNAPI
+                options.SetNumThreads(2);      // два потока для CPU
+                options.SetUseNNAPI(false);    // отключаем NNAPI
 
                 _tflite = new Interpreter(_modelBuffer, options);
                 _logger.LogInformation("MobileNet TensorFlow Lite initialized (CPU mode)");
@@ -528,7 +529,6 @@ namespace Presentation.Services
         private HumanDetectionResult DetectPersonAndroid(SKBitmap bitmap, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-
             try
             {
                 var input = PreprocessImage(bitmap);
@@ -543,7 +543,7 @@ namespace Presentation.Services
 
         private float[] PreprocessImage(SKBitmap bitmap)
         {
-            using var resized = bitmap.Resize(new SKImageInfo(InputSize, InputSize), SKFilterQuality.Low);
+            using var resized = bitmap.Resize(new SKImageInfo(InputSize, InputSize), SKFilterQuality.Medium);
 
             int idx = 0;
             for (int y = 0; y < InputSize; y++)
@@ -561,27 +561,27 @@ namespace Presentation.Services
 
         private HumanDetectionResult RunInference(float[] input)
         {
-            // Float -> ByteBuffer
             var inputBuffer = ByteBuffer.AllocateDirect(input.Length * sizeof(float));
             inputBuffer.Order(ByteOrder.NativeOrder());
             inputBuffer.AsFloatBuffer().Put(input);
             inputBuffer.Rewind();
 
-            // ByteBuffer для результата
             var outputBuffer = ByteBuffer.AllocateDirect(NumClasses * sizeof(float));
             outputBuffer.Order(ByteOrder.NativeOrder());
             outputBuffer.Rewind();
+
             _tflite.Run(inputBuffer, outputBuffer);
-            // Преобразуем ByteBuffer обратно в float[]
+
             outputBuffer.Rewind();
             var outputFlat = new float[NumClasses];
             outputBuffer.AsFloatBuffer().Get(outputFlat);
+
             int personIndex = Array.FindIndex(_labels, l => l.Contains("person", StringComparison.OrdinalIgnoreCase));
             if (personIndex < 0) return HumanDetectionResult.NoPerson;
+
             float confidence = outputFlat[personIndex];
             if (confidence < ConfidenceThreshold) return HumanDetectionResult.NoPerson;
-            for (int i = 0; i < _labels.Length; i++)
-                _logger.LogDebug($"{_labels[i]}: {outputFlat[i]:F3}");
+
             return new HumanDetectionResult(new HumanESP(confidence), true);
         }
 #endif

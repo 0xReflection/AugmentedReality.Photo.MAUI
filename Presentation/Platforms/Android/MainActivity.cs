@@ -22,6 +22,7 @@ namespace Presentation.Platforms.Android
             base.OnCreate(savedInstanceState);
             Instance = this;
         }
+
     }
 
 }

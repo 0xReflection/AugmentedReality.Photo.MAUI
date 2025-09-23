@@ -17,5 +17,6 @@ namespace Domain.Interfaces
         Task StopFrameDispatchAsync();
         bool IsDispatching { get; }
         int Fps { get; }
+        void EnqueueFrame(SKBitmap frame);
     }
 }

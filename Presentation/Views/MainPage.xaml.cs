@@ -1,7 +1,7 @@
-﻿using Domain.Models;
+﻿using Microsoft.Maui.Controls;
 using Presentation.ViewModel;
-using SkiaSharp.Views.Maui;
 using SkiaSharp;
+using SkiaSharp.Views.Maui;
 using System;
 
 namespace Presentation.Views
@@ -42,7 +42,6 @@ namespace Presentation.Views
         protected override void OnAppearing()
         {
             base.OnAppearing();
-
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
             Device.StartTimer(TimeSpan.FromMilliseconds(16), () =>
@@ -58,13 +57,10 @@ namespace Presentation.Views
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
-
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
 
             if (_viewModel.IsDetecting)
-            {
                 _ = _viewModel.ToggleDetectionCommand.ExecuteAsync(null);
-            }
         }
 
         private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -98,7 +94,6 @@ namespace Presentation.Views
                 var x = 10;
                 var y = 30;
 
-                // Фон для текста
                 using var backgroundPaint = new SKPaint
                 {
                     Color = SKColors.Black.WithAlpha(0x7F),

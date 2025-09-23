@@ -1,46 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:supportsRtl="true"></application>
-	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.CAMERA" />
-	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-	<uses-permission android:name="android.permission.ACCEPT_HANDOVER" />
-	<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-	<uses-permission android:name="android.permission.ACCESS_BLOBS_ACROSS_USERS" />
-	<uses-permission android:name="android.permission.ACCESS_CHECKIN_PROPERTIES" />
-	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-	<uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
-	<uses-permission android:name="android.permission.ACCESS_LOCATION_EXTRA_COMMANDS" />
-	<uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
-	<uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" />
-	<uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-	<uses-permission android:name="android.permission.ACCESS_SURFACE_FLINGER" />
-	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-	<uses-permission android:name="android.permission.ACCOUNT_MANAGER" />
-	<uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-	<uses-permission android:name="com.android.voicemail.permission.ADD_VOICEMAIL" />
-	<uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-	<uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
-	<uses-permission android:name="android.permission.BATTERY_STATS" />
-	<uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-	<uses-permission android:name="android.permission.BIND_APPWIDGET" />
-	<uses-permission android:name="android.permission.BIND_AUTOFILL_SERVICE" />
-	<uses-permission android:name="android.permission.BIND_CALL_REDIRECTION_SERVICE" />
-	<uses-permission android:name="android.permission.BIND_CARRIER_MESSAGING_CLIENT_SERVICE" />
-	<uses-permission android:name="android.permission.BIND_CARRIER_MESSAGING_SERVICE" />
-	<uses-permission android:name="android.permission.BIND_CARRIER_SERVICES" />
-	<uses-permission android:name="android.permission.BLUETOOTH" />
-	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-	<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-	<uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED" />
-	<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-	<uses-permission android:name="android.permission.BODY_SENSORS" />
-	<uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
-	<uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
-	<uses-permission android:name="android.permission.DEVICE_POWER" />
-	<uses-permission android:name="android.permission.DIAGNOSTIC" />
-	<uses-permission android:name="android.permission.DUMP" />
-	<uses-permission android:name="android.permission.FLASHLIGHT" />
+
+	<!-- Для записи фото в общие медиа-папки (Android 13+ используйте READ_MEDIA_IMAGES при необходимости) -->
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+	<!-- Android 13+ (if you target/handle API 33+ and want to read images) -->
+	<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:supportsRtl="true">
+	</application>
 </manifest>

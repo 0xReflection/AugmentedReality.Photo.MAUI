@@ -2,20 +2,23 @@
 using Domain.Models;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
+using System;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Infrastructure.Services
 {
-    public sealed class RealTimeDetectionService : IRealTimeDetectionService
+    public sealed class RealTimeDetectionService : IRealTimeDetectionService, IDisposable
     {
         private readonly IFrameDispatcherService _frameDispatcher;
         private readonly IObjectDetectionService _detectionService;
         private readonly ILogger<RealTimeDetectionService> _logger;
 
+        private CancellationTokenSource _cts;
         private bool _disposed;
         private HumanDetectionResult _lastDetectionResult;
-        private CancellationTokenSource _processingCts;
-        private readonly Stopwatch _fpsStopwatch;
+        private Stopwatch _fpsStopwatch;
         private int _frameCount;
         private DateTime _lastFpsUpdate;
         private double _currentFps;
@@ -39,13 +42,9 @@ namespace Infrastructure.Services
                 }
             }
         }
-
         public HumanDetectionResult LastDetectionResult => _lastDetectionResult;
 
-        public RealTimeDetectionService(
-            IFrameDispatcherService frameDispatcher,
-            IObjectDetectionService detectionService,
-            ILogger<RealTimeDetectionService> logger)
+        public RealTimeDetectionService(IFrameDispatcherService frameDispatcher, IObjectDetectionService detectionService, ILogger<RealTimeDetectionService> logger)
         {
             _frameDispatcher = frameDispatcher;
             _detectionService = detectionService;
@@ -54,121 +53,64 @@ namespace Infrastructure.Services
             _fpsStopwatch = new Stopwatch();
             _lastFpsUpdate = DateTime.Now;
 
+            // Подписка на кадры для AI-потока
             _frameDispatcher.OnFrameForAi += OnFrameForAiReceived;
         }
 
-        public async Task StartRealTimeDetectionAsync(CancellationToken ct = default)
-        {
-            if (IsDetecting)
-            {
-                _logger.LogWarning("Detection is already running");
-                return;
-            }
-
-            try
-            {
-                _processingCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                IsDetecting = true;
-                _frameCount = 0;
-                _currentFps = 0;
-
-                OnStatusChanged?.Invoke(this, $"Запуск детекции ({TargetFps} FPS)...");
-                _logger.LogInformation($"Starting real-time detection with target FPS: {TargetFps}");
-
-                _ = Task.Run(() => MonitorFpsAsync(_processingCts.Token), _processingCts.Token);
-
-                OnStatusChanged?.Invoke(this, "Детекция активна");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to start detection");
-                OnDetectionError?.Invoke(this, $"Ошибка запуска: {ex.Message}");
-                IsDetecting = false;
-                throw;
-            }
-        }
-
+        // AI-поток: TensorFlow Lite inference
         private async void OnFrameForAiReceived(object sender, SKBitmap frame)
         {
-            if (!IsDetecting || _processingCts.Token.IsCancellationRequested)
+            if (!IsDetecting || _cts.Token.IsCancellationRequested)
             {
-                frame?.Dispose();
+                frame.Dispose();
                 return;
             }
 
-            var stopwatch = Stopwatch.StartNew();
-
-            try
+            using (frame)
             {
-                using (frame)
+                try
                 {
-                    if (ShouldSkipFrame())
-                        return;
-
-                    var result = await _detectionService.DetectPersonAsync(frame, _processingCts.Token);
+                    var result = await _detectionService.DetectPersonAsync(frame, _cts.Token);
                     _lastDetectionResult = result;
-
                     OnPersonDetected?.Invoke(this, result);
-
-                    var processingTime = stopwatch.ElapsedMilliseconds;
-                    if (processingTime > 1000 / TargetFps)
-                        _logger.LogWarning($"Slow processing: {processingTime}ms (target: {1000 / TargetFps}ms)");
+                }
+                catch (Exception ex)
+                {
+                    OnDetectionError?.Invoke(this, ex.Message);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                // Игнорируем
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing AI frame");
-                OnDetectionError?.Invoke(this, $"Ошибка обработки: {ex.Message}");
-            }
-            finally
-            {
-                stopwatch.Stop();
-                _frameCount++;
-            }
+
+            _frameCount++;
         }
 
-        private bool ShouldSkipFrame()
+        // Автостарт сканирования при запуске
+        public async Task StartRealTimeDetectionAsync(CancellationToken ct = default)
         {
-            if (_currentFps > TargetFps * 1.2)
-                return _frameCount % 2 == 0;
+            if (IsDetecting) return;
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            IsDetecting = true;
+            _frameCount = 0;
 
-            return false;
+            // сразу запускаем FPS-мониторинг
+            _ = Task.Run(() => MonitorFpsAsync(_cts.Token), _cts.Token);
+
+            // подписка на кадры включена в конструкторе, AI поток уже готов
         }
 
+        // Поток FPS для UI
         private async Task MonitorFpsAsync(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested && IsDetecting)
             {
-                try
+                await Task.Delay(1000, ct);
+
+                var now = DateTime.Now;
+                var elapsed = (now - _lastFpsUpdate).TotalSeconds;
+                if (elapsed >= 1.0)
                 {
-                    await Task.Delay(1000, ct);
-
-                    var now = DateTime.Now;
-                    var elapsedSeconds = (now - _lastFpsUpdate).TotalSeconds;
-
-                    if (elapsedSeconds >= 1.0)
-                    {
-                        _currentFps = _frameCount / elapsedSeconds;
-                        _frameCount = 0;
-                        _lastFpsUpdate = now;
-
-                        _logger.LogDebug($"Current FPS: {_currentFps:F1}, Target: {TargetFps}");
-
-                        if (_currentFps < TargetFps * 0.7)
-                            OnStatusChanged?.Invoke(this, $"Низкий FPS: {_currentFps:F1}/s");
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in FPS monitoring");
+                    _currentFps = _frameCount / elapsed;
+                    _frameCount = 0;
+                    _lastFpsUpdate = now;
                 }
             }
         }
@@ -177,43 +119,20 @@ namespace Infrastructure.Services
         {
             if (!IsDetecting) return;
 
-            try
-            {
-                _processingCts.Cancel();
-                IsDetecting = false;
+            _cts.Cancel();
+            IsDetecting = false;
 
-                _logger.LogInformation("Detection stopped");
-                OnStatusChanged?.Invoke(this, "Детекция остановлена");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error stopping detection");
-                OnDetectionError?.Invoke(this, $"Ошибка остановки: {ex.Message}");
-            }
+            await Task.CompletedTask;
+            OnStatusChanged?.Invoke(this, "Detection stopped");
         }
 
         public void Dispose()
         {
             if (_disposed) return;
 
-            try
-            {
-                _frameDispatcher.OnFrameForAi -= OnFrameForAiReceived;
-                _processingCts?.Cancel();
-                _processingCts?.Dispose();
-
-                if (IsDetecting)
-                {
-                    StopRealTimeDetectionAsync().Wait(3000);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during disposal");
-            }
-
+            _frameDispatcher.OnFrameForAi -= OnFrameForAiReceived;
+            _cts?.Cancel();
             _disposed = true;
-            GC.SuppressFinalize(this);
         }
     }
 }

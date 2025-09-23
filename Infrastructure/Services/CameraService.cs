@@ -14,8 +14,7 @@ namespace Infrastructure.Services
 
         public abstract Task InitializeAsync();
         public abstract Task StopAsync();
-        public abstract IAsyncEnumerable<SKBitmap> GetFrameStream(
-            [EnumeratorCancellation] CancellationToken ct);
+        public abstract IAsyncEnumerable<SKBitmap> GetFrameStream([EnumeratorCancellation] CancellationToken ct);
         public abstract Task<Photo?> CaptureAsync(CancellationToken ct = default);
 
         public virtual void Dispose()
@@ -48,4 +47,5 @@ namespace Infrastructure.Services
             Dispose(false);
         }
     }
+
 }

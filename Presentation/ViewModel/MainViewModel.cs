@@ -7,6 +7,7 @@ using SkiaSharp;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Maui.ApplicationModel; // Permissions, MainThread
 
 namespace Presentation.ViewModel
 {
@@ -16,9 +17,11 @@ namespace Presentation.ViewModel
         private readonly ICameraService _cameraService;
         private readonly IFrameDispatcherService _frameDispatcher;
         private readonly ILogger<MainViewModel> _logger;
+
         private bool _disposed;
-        private DateTime _lastUpdateTime;
         private bool _isFrameUpdating;
+        private CancellationTokenSource? _cts;
+        private Task? _frameDispatchTask;
 
         [ObservableProperty] private bool _isDetecting;
         [ObservableProperty] private string _detectionStatus = "Готов к работе";
@@ -42,12 +45,14 @@ namespace Presentation.ViewModel
             _frameDispatcher = frameDispatcher ?? throw new ArgumentNullException(nameof(frameDispatcher));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
+            // Подписываемся на события единожды
             _detectionService.OnPersonDetected += OnPersonDetected;
             _detectionService.OnDetectionError += OnDetectionError;
             _detectionService.OnStatusChanged += OnStatusChanged;
             _frameDispatcher.OnFrameForUi += OnFrameForUiReceived;
 
-            TargetFps = _detectionService.TargetFps;
+            // Синхронизируем target fps
+            _targetFps = _detectionService.TargetFps;
         }
 
         [RelayCommand]
@@ -65,48 +70,151 @@ namespace Presentation.ViewModel
             if (fps >= 5 && fps <= 30)
             {
                 TargetFps = fps;
-                _detectionService.TargetFps = fps;
+                try
+                {
+                    _detectionService.TargetFps = fps;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to set target fps");
+                }
+            }
+        }
+
+        private async Task<bool> EnsureCameraPermissionAsync()
+        {
+            try
+            {
+                var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
+                if (status == PermissionStatus.Granted) return true;
+
+                status = await Permissions.RequestAsync<Permissions.Camera>();
+                return status == PermissionStatus.Granted;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Permission check/request failed");
+                return false;
             }
         }
 
         private async Task StartDetectionAsync()
         {
+            if (IsDetecting) return;
+
+            // Проверка пермишнов
+            if (!await EnsureCameraPermissionAsync())
+            {
+                DetectionStatus = "Нет доступа к камере";
+                return;
+            }
+
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+
             try
             {
                 DetectionStatus = "Запуск камеры...";
+                // Инициализация камеры — может бросить исключение
                 await _cameraService.InitializeAsync();
 
                 DetectionStatus = "Запуск потоковой передачи...";
-                await _frameDispatcher.StartFrameDispatchAsync(
-                    _cameraService.GetFrameStream(CancellationToken.None),
-                    CancellationToken.None);
+
+                // Запускаем фоновую задачу, которая читает кадры и передаёт диспетчеру
+                _frameDispatchTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await foreach (var frame in _cameraService.GetFrameStream(_cts.Token).WithCancellation(_cts.Token))
+                        {
+                            if (_cts.Token.IsCancellationRequested)
+                            {
+                                frame.Dispose();
+                                break;
+                            }
+
+                            try
+                            {
+                                // Передаём кадр диспетчеру (он сам должен копировать/распределять)
+                                _frameDispatcher.EnqueueFrame(frame);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Frame dispatch enqueue failed");
+                                frame.Dispose();
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) { /* expected on cancel */ }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error while reading frames from camera");
+                    }
+                }, _cts.Token);
 
                 DetectionStatus = "Запуск детекции...";
-                await _detectionService.StartRealTimeDetectionAsync();
+                await _detectionService.StartRealTimeDetectionAsync(_cts.Token);
 
                 IsDetecting = true;
-                _lastUpdateTime = DateTime.Now;
                 DetectionStatus = "Камера активна - наведите на человека";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to start detection");
                 DetectionStatus = $"Ошибка: {ex.Message}";
-                await StopDetectionAsync();
+
+                // Попытка аккуратно откатиться
+                try { _cts?.Cancel(); } catch { }
+                try { await _frameDispatcher.StopFrameDispatchAsync(); } catch { }
+                try { await _cameraService.StopAsync(); } catch { }
             }
         }
 
         private async Task StopDetectionAsync()
         {
+            if (!IsDetecting && (_cts == null)) return;
+
+            DetectionStatus = "Остановка...";
             try
             {
-                DetectionStatus = "Остановка...";
+                _cts?.Cancel();
 
-                await _detectionService.StopRealTimeDetectionAsync();
-                await _frameDispatcher.StopFrameDispatchAsync();
-                await _cameraService.StopAsync();
+                try
+                {
+                    await _detectionService.StopRealTimeDetectionAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping detection service");
+                }
 
-                IsDetecting = false;
+                try
+                {
+                    await _frameDispatcher.StopFrameDispatchAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping frame dispatcher");
+                }
+
+                try
+                {
+                    await _cameraService.StopAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping camera service");
+                }
+
+                if (_frameDispatchTask != null)
+                {
+                    try { await _frameDispatchTask; } catch (Exception ex) { _logger.LogWarning(ex, "Frame dispatch task failed on stop"); }
+                    _frameDispatchTask = null;
+                }
+            }
+            finally
+            {
+                // Очистка UI состояния
                 CurrentFrame?.Dispose();
                 CurrentFrame = null;
                 DetectionResult = null;
@@ -115,17 +223,18 @@ namespace Presentation.ViewModel
                 ProcessingTime = "0ms";
                 IsPersonDetected = false;
                 DetectionQuality = "";
+                IsDetecting = false;
                 DetectionStatus = "Готов к работе";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to stop detection");
-                DetectionStatus = $"Ошибка остановки: {ex.Message}";
+
+                _cts?.Dispose();
+                _cts = null;
             }
         }
 
         private void OnFrameForUiReceived(object? sender, SKBitmap frame)
         {
+            if (frame == null) return;
+
             if (_isFrameUpdating)
             {
                 frame.Dispose();
@@ -139,12 +248,13 @@ namespace Presentation.ViewModel
                 try
                 {
                     CurrentFrame?.Dispose();
+                    // В нашем договоре: диспетчер предоставляет фреймы — используем их как есть
                     CurrentFrame = frame;
                     CurrentFps = _detectionService.CurrentFps;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing UI frame");
+                    _logger.LogError(ex, "Error updating UI frame");
                     frame.Dispose();
                 }
                 finally
@@ -156,14 +266,11 @@ namespace Presentation.ViewModel
 
         private void OnPersonDetected(object? sender, HumanDetectionResult result)
         {
-            var now = DateTime.Now;
-            var elapsed = (now - _lastUpdateTime).TotalMilliseconds;
-            _lastUpdateTime = now;
+            if (result == null) return;
 
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 DetectionResult = result;
-                ProcessingTime = $"{elapsed:F0}ms";
                 IsPersonDetected = result.HasPerson;
 
                 if (result.HasPerson && result.Human != null)
@@ -171,9 +278,9 @@ namespace Presentation.ViewModel
                     DetectionConfidence = result.Human.Confidence;
                     DetectionQuality = result.Human.Confidence switch
                     {
-                        > 0.8f => " Высокая точность",
+                        > 0.8f => "Высокая точность",
                         > 0.6f => "Хорошее качество",
-                        > 0.4f => " Средняя уверенность",
+                        > 0.4f => "Средняя уверенность",
                         _ => "Низкая уверенность"
                     };
                     DetectionStatus = $"Человек обнаружен: {result.Human.Confidence:P0}";
@@ -207,25 +314,28 @@ namespace Presentation.ViewModel
         public async ValueTask DisposeAsync()
         {
             if (_disposed) return;
+            _disposed = true;
 
+            // Отписываемся
             try
             {
                 _frameDispatcher.OnFrameForUi -= OnFrameForUiReceived;
                 _detectionService.OnPersonDetected -= OnPersonDetected;
                 _detectionService.OnDetectionError -= OnDetectionError;
                 _detectionService.OnStatusChanged -= OnStatusChanged;
+            }
+            catch { /* safe */ }
 
-                if (IsDetecting)
-                    await StopDetectionAsync();
-
-                CurrentFrame?.Dispose();
+            try
+            {
+                await StopDetectionAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during disposal");
+                _logger.LogWarning(ex, "Error during DisposeAsync StopDetection");
             }
 
-            _disposed = true;
+            CurrentFrame?.Dispose();
         }
     }
 }

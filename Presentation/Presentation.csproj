@@ -105,6 +105,11 @@
 	<ItemGroup>
 	  <AndroidResource Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
 	</ItemGroup>
+	
+
+	<ItemGroup>
+	  <Compile Remove="Services\ObjDetectionServiceWin.cs" />
+	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Domain\Domain.csproj" />
 		<ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
@@ -124,6 +129,7 @@
 		<PackageReference Include="SkiaSharp" Version="3.119.0" />
 		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.0" />
 		<PackageReference Include="SkiaSharp.Views.Maui.Core" Version="3.119.0" />
+		<PackageReference Include="TensorFlow.NET" Version="0.150.0" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Platforms\Android\Resources\Layouts\" />
