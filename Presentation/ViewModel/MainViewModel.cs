@@ -7,7 +7,7 @@ using SkiaSharp;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Maui.ApplicationModel; // Permissions, MainThread
+using Microsoft.Maui.ApplicationModel;
 
 namespace Presentation.ViewModel
 {
@@ -18,21 +18,48 @@ namespace Presentation.ViewModel
         private readonly IFrameDispatcherService _frameDispatcher;
         private readonly ILogger<MainViewModel> _logger;
 
-        private bool _disposed;
-        private bool _isFrameUpdating;
-        private CancellationTokenSource? _cts;
-        private Task? _frameDispatchTask;
+        private bool _disposed = false;
+        private bool _isFrameUpdating = false;
+        private CancellationTokenSource _cts;
+        private Task _frameDispatchTask;
+        private DateTime _lastProcessingTimeUpdate = DateTime.Now;
+        private readonly object _lockObject = new object();
 
-        [ObservableProperty] private bool _isDetecting;
-        [ObservableProperty] private string _detectionStatus = "Готов к работе";
-        [ObservableProperty] private HumanDetectionResult? _detectionResult;
-        [ObservableProperty] private float _detectionConfidence;
-        [ObservableProperty] private double _currentFps;
-        [ObservableProperty] private int _targetFps = 15;
-        [ObservableProperty] private string _processingTime = "0ms";
-        [ObservableProperty] private bool _isPersonDetected;
-        [ObservableProperty] private string _detectionQuality = "";
-        [ObservableProperty] private SKBitmap? _currentFrame;
+        [ObservableProperty]
+        private bool _isDetecting;
+
+        [ObservableProperty]
+        private string _detectionStatus = "Готов к работе";
+
+        [ObservableProperty]
+        private HumanDetectionResult _detectionResult;
+
+        [ObservableProperty]
+        private float _detectionConfidence;
+
+        [ObservableProperty]
+        private double _currentFps;
+
+        [ObservableProperty]
+        private int _targetFps = 15;
+
+        [ObservableProperty]
+        private string _processingTime = "0ms";
+
+        [ObservableProperty]
+        private bool _isPersonDetected;
+
+        [ObservableProperty]
+        private string _detectionQuality = "";
+
+        [ObservableProperty]
+        private SKBitmap _currentFrame;
+
+        [ObservableProperty]
+        private bool _isCameraActive;
+
+        [ObservableProperty]
+        private bool _isProcessing;
 
         public MainViewModel(
             IRealTimeDetectionService detectionService,
@@ -44,40 +71,89 @@ namespace Presentation.ViewModel
             _cameraService = cameraService ?? throw new ArgumentNullException(nameof(cameraService));
             _frameDispatcher = frameDispatcher ?? throw new ArgumentNullException(nameof(frameDispatcher));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-            // Подписываемся на события единожды
             _detectionService.OnPersonDetected += OnPersonDetected;
             _detectionService.OnDetectionError += OnDetectionError;
             _detectionService.OnStatusChanged += OnStatusChanged;
             _frameDispatcher.OnFrameForUi += OnFrameForUiReceived;
 
-            // Синхронизируем target fps
-            _targetFps = _detectionService.TargetFps;
+            TargetFps = _detectionService.TargetFps;
         }
 
         [RelayCommand]
         private async Task ToggleDetectionAsync()
         {
             if (IsDetecting)
+            {
                 await StopDetectionAsync();
+            }
             else
+            {
                 await StartDetectionAsync();
+            }
         }
 
         [RelayCommand]
         private void ChangeTargetFps(int fps)
         {
-            if (fps >= 5 && fps <= 30)
+            if (fps >= 1 && fps <= 30)
             {
                 TargetFps = fps;
-                try
+                _detectionService.TargetFps = fps;
+                DetectionStatus = $"FPS установлен на {fps}";
+            }
+        }
+
+        [RelayCommand]
+        private async Task CapturePhotoAsync()
+        {
+            if (!IsDetecting) return;
+
+            try
+            {
+                IsProcessing = true;
+                var photo = await _cameraService.CaptureAsync(_cts?.Token ?? default);
+
+                if (photo?.Bitmap != null)
                 {
-                    _detectionService.TargetFps = fps;
+                    DetectionStatus = "Фото захвачено";
+                    photo.Bitmap.Dispose();
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to set target fps");
-                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error capturing photo");
+                DetectionStatus = "Ошибка захвата фото";
+            }
+            finally
+            {
+                IsProcessing = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task RestartCameraAsync()
+        {
+            if (!IsDetecting) return;
+
+            try
+            {
+                IsProcessing = true;
+                DetectionStatus = "Перезапуск камеры...";
+
+                await StopDetectionAsync();
+                await Task.Delay(500);
+                await StartDetectionAsync();
+
+                DetectionStatus = "Камера перезапущена";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error restarting camera");
+                DetectionStatus = "Ошибка перезапуска";
+            }
+            finally
+            {
+                IsProcessing = false;
             }
         }
 
@@ -93,151 +169,140 @@ namespace Presentation.ViewModel
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Permission check/request failed");
+                _logger.LogError(ex, "Camera permission error");
                 return false;
             }
         }
 
         private async Task StartDetectionAsync()
         {
-            if (IsDetecting) return;
+            lock (_lockObject)
+            {
+                if (IsDetecting || _disposed) return;
+            }
 
-            // Проверка пермишнов
             if (!await EnsureCameraPermissionAsync())
             {
-                DetectionStatus = "Нет доступа к камере";
+                DetectionStatus = "Нет разрешения камеры";
                 return;
             }
 
-            _cts?.Dispose();
             _cts = new CancellationTokenSource();
 
             try
             {
-                DetectionStatus = "Запуск камеры...";
-                // Инициализация камеры — может бросить исключение
+                DetectionStatus = "Инициализация камеры";
+                IsProcessing = true;
+
                 await _cameraService.InitializeAsync();
+                IsCameraActive = true;
 
-                DetectionStatus = "Запуск потоковой передачи...";
+                DetectionStatus = "Запуск потоков";
 
-                // Запускаем фоновую задачу, которая читает кадры и передаёт диспетчеру
-                _frameDispatchTask = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await foreach (var frame in _cameraService.GetFrameStream(_cts.Token).WithCancellation(_cts.Token))
-                        {
-                            if (_cts.Token.IsCancellationRequested)
-                            {
-                                frame.Dispose();
-                                break;
-                            }
+             
+                _frameDispatchTask = ProcessCameraFramesAsync(_cts.Token);
 
-                            try
-                            {
-                                // Передаём кадр диспетчеру (он сам должен копировать/распределять)
-                                _frameDispatcher.EnqueueFrame(frame);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Frame dispatch enqueue failed");
-                                frame.Dispose();
-                            }
-                        }
-                    }
-                    catch (OperationCanceledException) { /* expected on cancel */ }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error while reading frames from camera");
-                    }
-                }, _cts.Token);
-
-                DetectionStatus = "Запуск детекции...";
+                DetectionStatus = "Запуск детекции";
                 await _detectionService.StartRealTimeDetectionAsync(_cts.Token);
 
-                IsDetecting = true;
+                lock (_lockObject)
+                {
+                    IsDetecting = true;
+                }
+
+                IsProcessing = false;
                 DetectionStatus = "Камера активна - наведите на человека";
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to start detection");
                 DetectionStatus = $"Ошибка: {ex.Message}";
+                await StopDetectionAsync();
+            }
+        }
 
-                // Попытка аккуратно откатиться
-                try { _cts?.Cancel(); } catch { }
-                try { await _frameDispatcher.StopFrameDispatchAsync(); } catch { }
-                try { await _cameraService.StopAsync(); } catch { }
+        private async Task ProcessCameraFramesAsync(CancellationToken ct)
+        {
+            try
+            {
+                await foreach (var frame in _cameraService.GetFrameStream(ct).WithCancellation(ct))
+                {
+                    if (ct.IsCancellationRequested) break;
+
+                    try
+                    {
+                        _frameDispatcher.EnqueueFrame(frame);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error enqueueing frame");
+                        frame?.Dispose();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Camera frame processing error");
+                OnDetectionError(this, $"Camera error: {ex.Message}");
             }
         }
 
         private async Task StopDetectionAsync()
         {
-            if (!IsDetecting && (_cts == null)) return;
+            lock (_lockObject)
+            {
+                if (!IsDetecting && _cts == null) return;
+                _cts?.Cancel();
+            }
 
-            DetectionStatus = "Остановка...";
             try
             {
-                _cts?.Cancel();
-
-                try
-                {
-                    await _detectionService.StopRealTimeDetectionAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error stopping detection service");
-                }
-
-                try
-                {
-                    await _frameDispatcher.StopFrameDispatchAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error stopping frame dispatcher");
-                }
-
-                try
-                {
-                    await _cameraService.StopAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error stopping camera service");
-                }
+                await _detectionService.StopRealTimeDetectionAsync();
+                await _frameDispatcher.StopFrameDispatchAsync();
+                await _cameraService.StopAsync();
 
                 if (_frameDispatchTask != null)
                 {
-                    try { await _frameDispatchTask; } catch (Exception ex) { _logger.LogWarning(ex, "Frame dispatch task failed on stop"); }
+                    await _frameDispatchTask;
                     _frameDispatchTask = null;
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during stop");
+            }
             finally
             {
-                // Очистка UI состояния
-                CurrentFrame?.Dispose();
-                CurrentFrame = null;
-                DetectionResult = null;
-                DetectionConfidence = 0;
-                CurrentFps = 0;
-                ProcessingTime = "0ms";
-                IsPersonDetected = false;
-                DetectionQuality = "";
-                IsDetecting = false;
-                DetectionStatus = "Готов к работе";
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    CurrentFrame?.Dispose();
+                    CurrentFrame = null;
+                    DetectionResult = HumanDetectionResult.NoPerson;
+                    DetectionConfidence = 0;
+                    CurrentFps = 0;
+                    ProcessingTime = "0ms";
+                    IsPersonDetected = false;
+                    DetectionQuality = "";
+                    IsDetecting = false;
+                    IsCameraActive = false;
+                    IsProcessing = false;
+                    DetectionStatus = "Готов к работе";
+                });
 
                 _cts?.Dispose();
                 _cts = null;
             }
         }
 
-        private void OnFrameForUiReceived(object? sender, SKBitmap frame)
+        private void OnFrameForUiReceived(object sender, SKBitmap frame)
         {
-            if (frame == null) return;
-
-            if (_isFrameUpdating)
+            if (_isFrameUpdating || _disposed || frame == null || frame.IsNull)
             {
-                frame.Dispose();
+                frame?.Dispose();
                 return;
             }
 
@@ -248,7 +313,6 @@ namespace Presentation.ViewModel
                 try
                 {
                     CurrentFrame?.Dispose();
-                    // В нашем договоре: диспетчер предоставляет фреймы — используем их как есть
                     CurrentFrame = frame;
                     CurrentFps = _detectionService.CurrentFps;
                 }
@@ -264,77 +328,68 @@ namespace Presentation.ViewModel
             });
         }
 
-        private void OnPersonDetected(object? sender, HumanDetectionResult result)
+        private void OnPersonDetected(object sender, HumanDetectionResult result)
         {
-            if (result == null) return;
-
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                DetectionResult = result;
-                IsPersonDetected = result.HasPerson;
-
-                if (result.HasPerson && result.Human != null)
+                try
                 {
-                    DetectionConfidence = result.Human.Confidence;
-                    DetectionQuality = result.Human.Confidence switch
+                    DetectionResult = result;
+                    IsPersonDetected = result.HasPerson;
+
+                    if (result.HasPerson && result.Human != null)
                     {
-                        > 0.8f => "Высокая точность",
-                        > 0.6f => "Хорошее качество",
-                        > 0.4f => "Средняя уверенность",
-                        _ => "Низкая уверенность"
-                    };
-                    DetectionStatus = $"Человек обнаружен: {result.Human.Confidence:P0}";
+                        DetectionConfidence = result.Human.Confidence;
+                        DetectionQuality = result.Human.Confidence switch
+                        {
+                            > 0.8f => "Высокая точность",
+                            > 0.6f => "Хорошее качество",
+                            > 0.4f => "Средняя уверенность",
+                            _ => "Низкая уверенность"
+                        };
+                        DetectionStatus = $"Человек: {result.Human.Confidence:P0}";
+                    }
+                    else
+                    {
+                        DetectionConfidence = 0;
+                        DetectionQuality = "";
+                        DetectionStatus = "Человек не обнаружен";
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    DetectionConfidence = 0;
-                    DetectionQuality = "";
-                    DetectionStatus = "Человек не обнаружен";
+                    _logger.LogError(ex, "Error updating detection result");
                 }
             });
         }
 
-        private void OnDetectionError(object? sender, string errorMessage)
+        private void OnDetectionError(object sender, string error)
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                DetectionStatus = $"Ошибка: {errorMessage}";
-                _logger.LogWarning("Detection error: {Error}", errorMessage);
+                DetectionStatus = $"Ошибка: {error}";
             });
         }
 
-        private void OnStatusChanged(object? sender, string statusMessage)
+        private void OnStatusChanged(object sender, string status)
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                DetectionStatus = statusMessage;
+                DetectionStatus = status;
             });
         }
 
         public async ValueTask DisposeAsync()
         {
             if (_disposed) return;
+
             _disposed = true;
+            _frameDispatcher.OnFrameForUi -= OnFrameForUiReceived;
+            _detectionService.OnPersonDetected -= OnPersonDetected;
+            _detectionService.OnDetectionError -= OnDetectionError;
+            _detectionService.OnStatusChanged -= OnStatusChanged;
 
-            // Отписываемся
-            try
-            {
-                _frameDispatcher.OnFrameForUi -= OnFrameForUiReceived;
-                _detectionService.OnPersonDetected -= OnPersonDetected;
-                _detectionService.OnDetectionError -= OnDetectionError;
-                _detectionService.OnStatusChanged -= OnStatusChanged;
-            }
-            catch { /* safe */ }
-
-            try
-            {
-                await StopDetectionAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error during DisposeAsync StopDetection");
-            }
-
+            await StopDetectionAsync();
             CurrentFrame?.Dispose();
         }
     }

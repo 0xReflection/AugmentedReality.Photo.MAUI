@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-
 namespace AppUseCase.UseCases
 {
     public class CapturePhotoUseCase

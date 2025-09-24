@@ -1,20 +1,19 @@
 ﻿
+#if ANDROID
+using Android.Content;
+using AndroidX.Lifecycle;
 using AppUseCase.UseCases;
 using CommunityToolkit.Maui;
 using Domain.Interfaces;
 using Infrastructure.Services;
 using Microsoft.Extensions.Logging;
-
+using Presentation.Platforms.Android;
 using Presentation.Services;
 using Presentation.ViewModel;
 using Presentation.Views;
+using SkiaSharp;
 using SkiaSharp.Views.Maui.Controls.Hosting;
-
-#if ANDROID
-using Android.Content;
-using AndroidX.Lifecycle;
-using Presentation.Platforms.Android;
-#endif
+using System.Threading.Channels;
 
 namespace Presentation
 {
@@ -23,7 +22,7 @@ namespace Presentation
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
-            builder.UseMauiApp<App>().UseMauiCommunityToolkitMediaElement().UseMauiCommunityToolkitCamera().UseSkiaSharp().ConfigureFonts(fonts =>
+            builder.UseMauiApp<App>().UseSkiaSharp().ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
@@ -32,7 +31,7 @@ namespace Presentation
                 fonts.AddFont("Poppins-SemiBold.ttf", "PoppinsSemibold");
                 fonts.AddFont("Poppins-Regular.ttf", "Poppins");
                 fonts.AddFont("MaterialIconsOutlined-Regular.otf", "Material");
-            }).UseMauiCommunityToolkit();
+            }).UseMauiCommunityToolkit().UseMauiCommunityToolkitCamera();
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
@@ -43,14 +42,9 @@ namespace Presentation
 
         private static void RegisterServices(IServiceCollection services)
         {
-           
-#if ANDROID
-            
-            services.AddSingleton<ICameraService, AndroidCameraService>();
-            services.AddSingleton<Context>(provider =>
-           Android.App.Application.Context);
 
-            
+            services.AddSingleton<ICameraService, AndroidCameraService>();
+            services.AddSingleton<Context>(provider => Android.App.Application.Context);
             services.AddSingleton<ILifecycleOwner>(provider =>
             {
                 var activity = MainActivity.Instance;
@@ -58,41 +52,32 @@ namespace Presentation
                 {
                     throw new InvalidOperationException("MainActivity not initialized. Wait for activity to be created.");
                 }
+
                 return activity;
             });
-            //#elif WINDOWS
-            //            services.AddSingleton<ICameraService, WindowsCameraService>();
+            var aiChannel = Channel.CreateUnbounded<SKBitmap>();
 
-#endif
+            services.AddSingleton(aiChannel);             // сам канал
+            services.AddSingleton(aiChannel.Reader);      // для RealTimeDetectionService
+            services.AddSingleton(aiChannel.Writer);      // для CameraService/FrameDispatch
+            services.AddSingleton<IFrameDispatcherService, FrameDispatcherService>();
+            services.AddSingleton<IObjectDetectionService, ObjectDetectionService>();
+            services.AddSingleton<IRealTimeDetectionService, RealTimeDetectionService>();
             services.AddSingleton<IStorageService, StorageService>();
             services.AddSingleton<IQrService, QrService>();
             services.AddSingleton<IArService, ArService>();
-            services.AddSingleton<IObjectDetectionService, ObjectDetectionService>();
-            services.AddSingleton<IRealTimeDetectionService, RealTimeDetectionService>();
-            services.AddSingleton<IFrameDispatcherService, FrameDispatcherService>();
-            services.AddSingleton<IRealTimeDetectionService, RealTimeDetectionService>();
-            services.AddTransient<CapturePhotoUseCase>(sp =>
-                new CapturePhotoUseCase(
-                    sp.GetRequiredService<ICameraService>(),
-                    sp.GetRequiredService<IStorageService>()
-                ));
-
+            services.AddTransient<IDetectObjectsUseCase>(sp => new DetectObjectsUseCase(sp.GetRequiredService<IObjectDetectionService>(), sp.GetRequiredService<ILogger<DetectObjectsUseCase>>()));
+            services.AddTransient<CapturePhotoUseCase>(sp => new CapturePhotoUseCase(sp.GetRequiredService<ICameraService>(), sp.GetRequiredService<IStorageService>()));
             //services.AddTransient<LaunchArUseCase>(sp =>
             //    new LaunchArUseCase(
             //        sp.GetRequiredService<IArService>(),
             //        sp.GetRequiredService<IObjectDetectionService>()
             //    ));
-
-           //services.AddTransient<ScanQrUseCase>(sp =>
-           //     new ScanQrUseCase(sp.GetRequiredService<IQrService>()));
-
-            services.AddTransient<IDetectObjectsUseCase>(sp =>
-            new DetectObjectsUseCase(
-            sp.GetRequiredService<IObjectDetectionService>(),
-            sp.GetRequiredService<ILogger<DetectObjectsUseCase>>()
-            ));
-        }
+            //services.AddTransient<ScanQrUseCase>(sp =>
+            //     new ScanQrUseCase(sp.GetRequiredService<IQrService>()));
         
+
+        }
 
         private static void RegisterViewsAndViewModels(IServiceCollection services)
         {
@@ -102,3 +87,4 @@ namespace Presentation
         }
     }
 }
+#endif
