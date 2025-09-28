@@ -1,7 +1,5 @@
-﻿using Domain.Interfaces;
-using Domain.Models;
-using Microsoft.Extensions.Logging;
-using SkiaSharp;
+﻿
+
 
 
 
@@ -417,14 +415,11 @@ using SkiaSharp;
 //        }
 //    }
 //}
-
 #if ANDROID
-using Xamarin.TensorFlow.Lite;
-using Java.Nio;
 using Android.App;
-#endif
-using Domain.Models;
 using Domain.Interfaces;
+using Domain.Models;
+using Java.Nio;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
 using System;
@@ -432,169 +427,128 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Xamarin.TensorFlow.Lite;
 
 namespace Presentation.Services
 {
-    public sealed class ObjectDetectionService : IObjectDetectionService, IDisposable
+    public sealed class ObjectDetectionService : IObjectDetectionService
     {
+        private const int INPUT_SIZE = 224;
+        private const int CHANNELS = 3;
+        private const float CONFIDENCE_THRESHOLD = 0.6f;
+
+        private Interpreter _interpreter;
+        private string[] _labels;
+        private bool _isInitialized;
         private readonly ILogger<ObjectDetectionService> _logger;
-        private bool _disposed;
 
-#if ANDROID
-        private Interpreter _tflite;
-        private ByteBuffer _modelBuffer;
-        private float[] _reusableInputArray;
-#endif
+        private ByteBuffer _inputBuffer;
+        private FloatBuffer _outputBuffer;
 
-        private readonly string[] _labels;
-        private const int InputSize = 224;
-        private const float ConfidenceThreshold = 0.6f;
-        private const int NumClasses = 1001;
+        public bool IsInitialized => _isInitialized;
+        public event EventHandler<Exception> OnError;
 
-        public ObjectDetectionService(ILogger<ObjectDetectionService> logger)
+        public ObjectDetectionService(ILogger<ObjectDetectionService> logger = null)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-#if ANDROID
-            InitializeTensorFlowLite();
-            _labels = LoadLabels();
-            _reusableInputArray = new float[InputSize * InputSize * 3];
-#else
-            _labels = new[] { "person" };
-#endif
+            _logger = logger;
         }
 
-#if ANDROID
-        private void InitializeTensorFlowLite()
+        public async Task<bool> InitializeAsync(CancellationToken ct = default)
         {
+            if (_isInitialized) return true;
+
             try
             {
-                var ctx = Android.App.Application.Context;
-                using var assetStream = ctx.Assets.Open("mobilenet_v1_1.0_224.tflite");
-                using var ms = new MemoryStream();
-                assetStream.CopyTo(ms);
+                using var stream = Android.App.Application.Context.Assets.Open("mobilenet_v1_1.0_224.tflite");
+                byte[] modelData = new byte[stream.Length];
+                await stream.ReadAsync(modelData, 0, modelData.Length);
 
-                var modelBytes = ms.ToArray();
-                _modelBuffer = ByteBuffer.AllocateDirect(modelBytes.Length);
-                _modelBuffer.Order(ByteOrder.NativeOrder());
-                _modelBuffer.Put(modelBytes);
-                _modelBuffer.Rewind();
+                var bb = ByteBuffer.AllocateDirect(modelData.Length);
+                bb.Put(modelData);
+                bb.Rewind();
 
                 var options = new Interpreter.Options();
-                options.SetNumThreads(2);      // два потока для CPU
-                options.SetUseNNAPI(false);    // отключаем NNAPI
+                options.SetNumThreads(Java.Lang.Runtime.GetRuntime().AvailableProcessors());
 
-                _tflite = new Interpreter(_modelBuffer, options);
-                _logger.LogInformation("MobileNet TensorFlow Lite initialized (CPU mode)");
+                _interpreter = new Interpreter(bb, options);
+
+                using var sr = new StreamReader(Android.App.Application.Context.Assets.Open("labels.txt"));
+                _labels = (await sr.ReadToEndAsync())
+                            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(x => x.Trim())
+                            .ToArray();
+
+                _inputBuffer = ByteBuffer.AllocateDirect(INPUT_SIZE * INPUT_SIZE * CHANNELS * sizeof(float));
+                _inputBuffer.Order(ByteOrder.NativeOrder());
+
+                _outputBuffer = ByteBuffer.AllocateDirect(_labels.Length * sizeof(float)).AsFloatBuffer();
+
+                _isInitialized = true;
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize TensorFlow Lite");
-                throw;
+                _logger?.LogError(ex, "ObjectDetection init failed");
+                OnError?.Invoke(this, ex);
+                return false;
             }
         }
 
-        private string[] LoadLabels()
+        public async Task<HumanDetectionResult> DetectAsync(SKBitmap frame, CancellationToken ct = default)
         {
-            try
-            {
-                var ctx = Android.App.Application.Context;
-                using var s = ctx.Assets.Open("labelmap.txt");
-                using var reader = new StreamReader(s);
-                return reader.ReadToEnd()
-                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(l => l.Trim())
-                    .ToArray();
-            }
-            catch
-            {
-                return new[] { "person" };
-            }
-        }
-#endif
+            if (!_isInitialized) throw new InvalidOperationException("Service not initialized");
+            if (frame == null || frame.IsNull) return HumanDetectionResult.NoPerson;
 
-        public async Task<HumanDetectionResult> DetectPersonAsync(SKBitmap frame, CancellationToken ct = default)
-        {
-#if ANDROID
-            return await Task.Run(() => DetectPersonAndroid(frame, ct), ct);
-#else
-            await Task.Delay(16, ct);
-            return new Random().NextDouble() > 0.5
-                ? new HumanDetectionResult(new HumanESP(0.9f), true)
-                : HumanDetectionResult.NoPerson;
-#endif
-        }
-
-#if ANDROID
-        private HumanDetectionResult DetectPersonAndroid(SKBitmap bitmap, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            try
+            return await Task.Run(() =>
             {
-                var input = PreprocessImage(bitmap);
-                return RunInference(input);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in classification");
-                return HumanDetectionResult.NoPerson;
-            }
-        }
-
-        private float[] PreprocessImage(SKBitmap bitmap)
-        {
-            using var resized = bitmap.Resize(new SKImageInfo(InputSize, InputSize), SKFilterQuality.Medium);
-
-            int idx = 0;
-            for (int y = 0; y < InputSize; y++)
-            {
-                for (int x = 0; x < InputSize; x++)
+                try
                 {
-                    var c = resized.GetPixel(x, y);
-                    _reusableInputArray[idx++] = c.Red / 127.5f - 1f;
-                    _reusableInputArray[idx++] = c.Green / 127.5f - 1f;
-                    _reusableInputArray[idx++] = c.Blue / 127.5f - 1f;
+                    using var resized = frame.Resize(new SKImageInfo(INPUT_SIZE, INPUT_SIZE), SKFilterQuality.Medium);
+                    if (resized == null) return HumanDetectionResult.NoPerson;
+
+                    _inputBuffer.Clear();
+                    foreach (var c in resized.Pixels)
+                    {
+                        _inputBuffer.PutFloat(c.Red / 127.5f - 1f);
+                        _inputBuffer.PutFloat(c.Green / 127.5f - 1f);
+                        _inputBuffer.PutFloat(c.Blue / 127.5f - 1f);
+                    }
+
+                    _outputBuffer.Clear();
+                    _interpreter.Run(_inputBuffer, _outputBuffer);
+
+                    float confidence = 0f;
+                    int personIdx = Array.FindIndex(_labels, x => x.ToLowerInvariant().Contains("person") || x.ToLowerInvariant().Contains("human"));
+                    if (personIdx >= 0) confidence = _outputBuffer.Get(personIdx);
+
+                    return confidence >= CONFIDENCE_THRESHOLD
+                        ? new HumanDetectionResult(true, confidence)
+                        : HumanDetectionResult.NoPerson;
                 }
-            }
-            return _reusableInputArray;
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Inference error");
+                    OnError?.Invoke(this, ex);
+                    return HumanDetectionResult.NoPerson;
+                }
+            }, ct);
         }
-
-        private HumanDetectionResult RunInference(float[] input)
-        {
-            var inputBuffer = ByteBuffer.AllocateDirect(input.Length * sizeof(float));
-            inputBuffer.Order(ByteOrder.NativeOrder());
-            inputBuffer.AsFloatBuffer().Put(input);
-            inputBuffer.Rewind();
-
-            var outputBuffer = ByteBuffer.AllocateDirect(NumClasses * sizeof(float));
-            outputBuffer.Order(ByteOrder.NativeOrder());
-            outputBuffer.Rewind();
-
-            _tflite.Run(inputBuffer, outputBuffer);
-
-            outputBuffer.Rewind();
-            var outputFlat = new float[NumClasses];
-            outputBuffer.AsFloatBuffer().Get(outputFlat);
-
-            int personIndex = Array.FindIndex(_labels, l => l.Contains("person", StringComparison.OrdinalIgnoreCase));
-            if (personIndex < 0) return HumanDetectionResult.NoPerson;
-
-            float confidence = outputFlat[personIndex];
-            if (confidence < ConfidenceThreshold) return HumanDetectionResult.NoPerson;
-
-            return new HumanDetectionResult(new HumanESP(confidence), true);
-        }
-#endif
 
         public void Dispose()
         {
-            if (_disposed) return;
-#if ANDROID
-            _tflite?.Close();
-            _tflite?.Dispose();
-            _modelBuffer?.Clear();
-#endif
-            _disposed = true;
+            try
+            {
+                _interpreter?.Close();
+                _interpreter?.Dispose();
+                _inputBuffer = null;
+                _outputBuffer = null;
+                _isInitialized = false;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Dispose error");
+            }
         }
     }
 }
+#endif

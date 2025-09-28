@@ -11,17 +11,21 @@ namespace Presentation.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is double doubleValue)
+            if (value is double confidence)
             {
-                return doubleValue switch
-                {
-                    > 0.8 => Colors.Green,
-                    > 0.6 => Colors.Yellow,
-                    > 0.4 => Colors.Orange,
-                    _ => Colors.Red
-                };
+                if (confidence < 0.4)
+                    return Colors.Red;
+                else if (confidence < 0.6)
+                    return Colors.Orange;
+                else if (confidence < 0.8)
+                    return Colors.Yellow;
+                else if (confidence < 0.95)
+                    return Colors.LightGreen;
+                else
+                    return Colors.Green;
             }
-            return Colors.Gray;
+
+            return Colors.Gray; // fallback
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

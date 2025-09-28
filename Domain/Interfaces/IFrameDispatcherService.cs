@@ -1,4 +1,8 @@
 ﻿using SkiaSharp;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Domain.Interfaces
 {
@@ -11,6 +15,7 @@ namespace Domain.Interfaces
         Task StopFrameDispatchAsync();
         bool IsDispatching { get; }
         int Fps { get; }
-        void EnqueueFrame(SKBitmap frame);
+        int QueueSize { get; }
+        long TotalFramesProcessed { get; }
     }
 }

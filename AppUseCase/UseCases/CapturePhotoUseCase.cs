@@ -1,9 +1,7 @@
 ﻿using Domain.Interfaces;
 using Domain.Models;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AppUseCase.UseCases
@@ -21,11 +19,27 @@ namespace AppUseCase.UseCases
 
         public async Task<Photo?> ExecuteAsync(CancellationToken ct = default)
         {
-            var photo = await _camera.CaptureAsync(ct);
-            if (photo == null) return null;
+            if (!_camera.IsInitialized)
+            {
+                throw new InvalidOperationException("Camera service is not initialized");
+            }
 
-            photo.FilePath = await _storage.SaveAsync(photo);
-            return photo;
+            var photo = await _camera.CaptureAsync(ct);
+            if (photo == null)
+            {
+                throw new InvalidOperationException("Failed to capture photo");
+            }
+
+            try
+            {
+                photo.FilePath = await _storage.SaveAsync(photo);
+                return photo;
+            }
+            catch
+            {
+                photo.Dispose();
+                throw;
+            }
         }
     }
 }

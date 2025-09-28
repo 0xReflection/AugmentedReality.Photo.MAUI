@@ -1,14 +1,17 @@
 ﻿using Domain.Models;
 using SkiaSharp;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Domain.Interfaces
 {
-    public interface ICameraService : IDisposable
+    public interface ICameraService : IAsyncDisposable
     {
-        IAsyncEnumerable<SKBitmap> GetFrameStream(CancellationToken ct);
-        Task<Photo?> CaptureAsync(CancellationToken ct = default);
-        Task InitializeAsync();
-        Task StopAsync();
         bool IsInitialized { get; }
+        Task InitializeAsync(CancellationToken ct = default);
+        IAsyncEnumerable<SKBitmap> GetFrameStream(CancellationToken ct = default);
+        Task StopAsync();
+        Task<Photo> CaptureAsync(CancellationToken ct = default);
     }
 }

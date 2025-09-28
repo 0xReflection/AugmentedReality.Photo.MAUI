@@ -3,36 +3,30 @@
              xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
-             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+
              xmlns:vm="clr-namespace:Presentation.ViewModel"
+             xmlns:converters="clr-namespace:Presentation.Converters"
              x:DataType="vm:MainViewModel"
              Title="Детекция людей"
              NavigationPage.HasNavigationBar="False">
 
     <ContentPage.Resources>
-        <toolkit:ColorToInverseColorConverter x:Key="InverseColorConverter" />
-        <toolkit:InvertedBoolConverter x:Key="InvertedBoolConverter" />
-
-        <toolkit:BoolToObjectConverter x:Key="DetectionButtonConverter"
-                                      TrueObject="ОСТАНОВИТЬ ДЕТЕКЦИЮ"
-                                      FalseObject="ЗАПУСТИТЬ ДЕТЕКЦИЮ" />
-
+        <!-- Конвертеры -->
+        <!--<toolkit:BoolToObjectConverter x:Key="DetectionButtonConverter"
+                                       TrueObject="ОСТАНОВИТЬ ДЕТЕКЦИЮ"
+                                       FalseObject="ЗАПУСТИТЬ ДЕТЕКЦИЮ" />
         <toolkit:BoolToObjectConverter x:Key="DetectionStatusConverter"
-                                      TrueObject="Обнаружен"
-                                      FalseObject="Не обнаружен" />
-
-        <!--<toolkit:DoubleToColorConverter x:Key="ConfidenceColorConverter"
-                                       Values="0.0,0.4,0.6,0.8,1.0"
-                                       Objects="Red,Orange,Yellow,LightGreen,Green" />-->
-
+                                       TrueObject="Обнаружен"
+                                       FalseObject="Не обнаружен" />
+        <converters:DoubleToColorConverter x:Key="ConfidenceColorConverter" />
         <toolkit:BoolToObjectConverter x:Key="StatusColorConverter"
-                                      TrueObject="Red"
-                                      FalseObject="Green" />
+                                       TrueObject="Red"
+                                       FalseObject="Green" />-->
 
+        <!-- Стили -->
         <Style TargetType="Label">
             <Setter Property="TextColor" Value="White" />
         </Style>
-
         <Style TargetType="Button">
             <Setter Property="BackgroundColor" Value="#1976D2" />
             <Setter Property="TextColor" Value="White" />
@@ -42,217 +36,22 @@
             <Setter Property="HeightRequest" Value="50" />
             <Setter Property="Margin" Value="0,5" />
         </Style>
-
-        <Style TargetType="Frame">
-            <Setter Property="BackgroundColor" Value="#80000000" />
-            <Setter Property="BorderColor" Value="#40FFFFFF" />
-            <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="HasShadow" Value="True" />
-            <Setter Property="Padding" Value="15" />
-        </Style>
     </ContentPage.Resources>
 
     <Grid>
-        <!-- Основной контент -->
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+        <skia:SKCanvasView x:Name="CameraCanvas" PaintSurface="CameraCanvas_PaintSurface" />
 
-        <!-- Область камеры и overlay -->
-        <Grid Grid.Row="0">
-            <!-- Основной вид для кадра с камеры -->
-            <skia:SKCanvasView x:Name="CameraFrameView"
-                               PaintSurface="OnCameraFramePaintSurface"
-                               IgnorePixelScaling="True"
-                               HorizontalOptions="FillAndExpand"
-                               VerticalOptions="FillAndExpand" />
+        <StackLayout Orientation="Horizontal" VerticalOptions="End" HorizontalOptions="Center" Spacing="10">
+            <Button Text="Start" Command="{Binding StartCameraAsync}" />
+            <Button Text="Stop" Command="{Binding StopCameraAsync}" />
+            <Button Text="Save" Command="{Binding SavePhotoAsync}" />
+        </StackLayout>
 
-            <!-- Overlay для детекции -->
-            <skia:SKCanvasView x:Name="DetectionOverlay"
-                               PaintSurface="OnDetectionPaintSurface"
-                               IgnorePixelScaling="True"
-                               InputTransparent="True"
-                               HorizontalOptions="FillAndExpand"
-                               VerticalOptions="FillAndExpand" />
-
-            <!-- Индикатор загрузки -->
-            <ActivityIndicator IsRunning="{Binding IsProcessing}"
-                               IsVisible="{Binding IsProcessing}"
-                               Color="White"
-                               BackgroundColor="#80000000"
-                               HorizontalOptions="Center"
-                               VerticalOptions="Center"
-                               WidthRequest="60"
-                               HeightRequest="60" />
-        </Grid>
-
-        <!-- Панель управления -->
-        <Frame Grid.Row="1" Margin="10,5,10,10">
-            <ScrollView>
-                <VerticalStackLayout Spacing="10">
-
-                    <!-- Статус и основная кнопка -->
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Статус -->
-                        <VerticalStackLayout Grid.Column="0" Spacing="2">
-                            <Label Text="{Binding DetectionStatus}"
-                                   FontSize="16"
-                                   FontAttributes="Bold"
-                                   LineBreakMode="WordWrap" />
-
-                            <Label Text="{Binding DetectionQuality}"
-                                   FontSize="12"
-                                   TextColor="LightGreen"
-                                   IsVisible="{Binding IsPersonDetected}" />
-                        </VerticalStackLayout>
-
-                        <!-- Основная кнопка -->
-                        <Button Grid.Column="1"
-                                Text="{Binding IsDetecting, Converter={StaticResource DetectionButtonConverter}}"
-                                Command="{Binding ToggleDetectionCommand}"
-                                BackgroundColor="{Binding IsDetecting, Converter={StaticResource StatusColorConverter}}"
-                                WidthRequest="160" />
-                    </Grid>
-
-                    <!-- Дополнительные кнопки управления -->
-                    <Grid ColumnSpacing="5" IsVisible="{Binding IsDetecting}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <Button Grid.Column="0"
-                                Text="📷 СНИМОК"
-                                Command="{Binding CapturePhotoCommand}"
-                                BackgroundColor="#FF9800" />
-
-                        <Button Grid.Column="1"
-                                Text="🔄 ПЕРЕЗАПУСК"
-                                Command="{Binding RestartCameraCommand}"
-                                BackgroundColor="#607D8B" />
-                    </Grid>
-
-                    <!-- Настройки FPS -->
-                    <Frame IsVisible="{Binding IsDetecting}"
-                           BackgroundColor="#60000000"
-                           Padding="10"
-                           BorderColor="#20FFFFFF">
-
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="НАСТРОЙКА ПРОИЗВОДИТЕЛЬНОСТИ"
-                                   FontSize="12"
-                                   FontAttributes="Bold"
-                                   TextColor="LightGray"
-                                   HorizontalOptions="Center" />
-
-                            <Grid ColumnSpacing="10" VerticalOptions="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Слайдер FPS -->
-                                <Slider Grid.Column="0"
-                                        Value="{Binding TargetFps}"
-                                        Minimum="5"
-                                        Maximum="30"
-                                        ThumbColor="#4CAF50"
-                                        MinimumTrackColor="#4CAF50"
-                                        MaximumTrackColor="#CCCCCC"
-                                        ValueChanged="OnTargetFpsSliderChanged" />
-
-                                <!-- Значение FPS -->
-                                <Label Grid.Column="1"
-                                       Text="{Binding TargetFps, StringFormat='{0} FPS'}"
-                                       FontSize="12"
-                                       TextColor="White"
-                                       VerticalOptions="Center"
-                                       MinimumWidthRequest="60" />
-                            </Grid>
-
-                            <!-- Статистика производительности -->
-                            <Grid ColumnSpacing="15">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <Label Grid.Column="0"
-                                       Text="{Binding CurrentFps, StringFormat='FPS: {0:F1}'}"
-                                       FontSize="11"
-                                       TextColor="LightBlue" />
-
-                                <Label Grid.Column="1"
-                                       Text="{Binding ProcessingTime, StringFormat='Время: {0}'}"
-                                       FontSize="11"
-                                       TextColor="LightGreen" />
-
-                                <Label Grid.Column="2"
-                                       Text="{Binding IsPersonDetected, Converter={StaticResource DetectionStatusConverter}}"
-                                       FontSize="11"
-                                       TextColor="{Binding IsPersonDetected, Converter={StaticResource StatusColorConverter}}"
-                                       HorizontalOptions="End" />
-                            </Grid>
-                        </VerticalStackLayout>
-                    </Frame>
-
-                    <!-- Индикатор уверенности -->
-                    <Frame IsVisible="{Binding IsPersonDetected}"
-                           BackgroundColor="#60000000"
-                           Padding="10"
-                           BorderColor="#20FFFFFF">
-
-                        <VerticalStackLayout Spacing="5">
-                            <Label Text="УВЕРЕННОСТЬ ДЕТЕКЦИИ"
-                                   FontSize="12"
-                                   FontAttributes="Bold"
-                                   TextColor="LightGray"
-                                   HorizontalOptions="Center" />
-
-                            <ProgressBar Progress="{Binding DetectionConfidence}"
-                                         ProgressColor="{Binding DetectionConfidence, Converter={StaticResource ConfidenceColorConverter}}"
-                                         HeightRequest="6" />
-
-                            <Label Text="{Binding DetectionConfidence, StringFormat='{0:P0}'}"
-                                   FontSize="11"
-                                   TextColor="{Binding DetectionConfidence, Converter={StaticResource ConfidenceColorConverter}}"
-                                   HorizontalOptions="Center" />
-                        </VerticalStackLayout>
-                    </Frame>
-
-                    <!-- Информация о камере -->
-                    <Frame IsVisible="{Binding IsCameraActive}"
-                           BackgroundColor="#60000000"
-                           Padding="10">
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <Label Grid.Column="0"
-                                   Text="Камера активна"
-                                   FontSize="11"
-                                   TextColor="LightGreen" />
-
-                            <Label Grid.Column="1"
-                                   Text="{Binding CameraResolution}"
-                                   FontSize="10"
-                                   TextColor="LightGray" />
-                        </Grid>
-                    </Frame>
-
-                </VerticalStackLayout>
-            </ScrollView>
-        </Frame>
-
+        <StackLayout Orientation="Horizontal" VerticalOptions="Start" HorizontalOptions="Start" Padding="10">
+            <Label Text="{Binding Status}" />
+            <Label Text="{Binding Fps, StringFormat='FPS: {0:F0}'}" Margin="10,0,0,0"/>
+            <Label Text="{Binding PersonDetected, StringFormat='Detected: {0}'}" Margin="10,0,0,0"/>
+            <Label Text="{Binding Confidence, StringFormat='Confidence: {0:P0}'}" Margin="10,0,0,0"/>
+        </StackLayout>
     </Grid>
 </ContentPage>

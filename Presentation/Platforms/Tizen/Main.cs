@@ -2,7 +2,7 @@ using Microsoft.Maui;
 using Microsoft.Maui.Hosting;
 using System;
 
-namespace Presentation
+namespace Presentation.Platforms.Tizen
 {
     internal class Program : MauiApplication
     {

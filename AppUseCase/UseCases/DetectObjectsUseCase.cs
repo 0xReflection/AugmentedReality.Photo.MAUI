@@ -1,12 +1,10 @@
 ﻿using Domain.Interfaces;
 using Domain.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AppUseCase.UseCases
 {
@@ -28,13 +26,33 @@ namespace AppUseCase.UseCases
 
         public async Task<HumanDetectionResult?> ExecuteAsync(SKBitmap frame, CancellationToken ct)
         {
-            if (frame == null) return HumanDetectionResult.NoPerson;
+            if (frame == null || frame.IsNull || frame.Width == 0 || frame.Height == 0)
+                return HumanDetectionResult.NoPerson;
 
-            using var ms = new System.IO.MemoryStream();
-            frame.Encode(ms, SkiaSharp.SKEncodedImageFormat.Jpeg, 80);
-            ms.Position = 0;
+            try
+            {
+                if (!_detector.IsInitialized)
+                {
+                    _logger.LogWarning("Detector not initialized, attempting initialization...");
+                    if (!await _detector.InitializeAsync(ct))
+                    {
+                        _logger.LogError("Detector initialization failed");
+                        return HumanDetectionResult.NoPerson;
+                    }
+                }
 
-            return await _detector.DetectPersonAsync(frame, ct);
+                return await _detector.DetectAsync(frame, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Detection operation cancelled");
+                return HumanDetectionResult.NoPerson;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in DetectObjectsUseCase");
+                return HumanDetectionResult.NoPerson;
+            }
         }
     }
 }

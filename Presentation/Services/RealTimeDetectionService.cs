@@ -1,177 +1,102 @@
-﻿#if ANDROID
-using Domain.Interfaces;
+﻿using Domain.Interfaces;
 using Domain.Models;
 using SkiaSharp;
 using System;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Presentation.Services
 {
-    public class RealTimeDetectionService : IRealTimeDetectionService
+    public sealed class RealTimeDetectionService : IRealTimeDetectionService
     {
-        private readonly ChannelReader<SKBitmap> _frameReader;
+        private readonly ICameraService _camera;
+        private readonly IFrameDispatcherService _dispatcher;
         private readonly IObjectDetectionService _detector;
-        private readonly CancellationTokenSource _cts = new();
-        private Task _processingTask;
-        private readonly object _lockObject = new object();
-
-        private int _processedFrames;
-        private DateTime _lastFpsUpdate = DateTime.Now;
+        private CancellationTokenSource _cts;
+        private DateTime _last = DateTime.UtcNow;
+        private int _frames;
         private double _currentFps;
-        private HumanDetectionResult _lastResult;
-        private bool _disposed = false;
+
+        public int TargetFps { get; set; } = 30;
+        public double CurrentFps => _currentFps;
+        public bool IsDetecting { get; private set; }
 
         public event EventHandler<HumanDetectionResult> OnPersonDetected;
-        public event EventHandler<string> OnDetectionError;
-        public event EventHandler<string> OnStatusChanged;
+        public event EventHandler<Exception> OnDetectionError;
+        public event EventHandler<DetectionStatus> OnStatusChanged;
+        public event EventHandler<HumanDetectionResult> OnFrameProcessed;
 
-        public bool IsDetecting { get; private set; }
-        public double CurrentFps => _currentFps;
-        public int TargetFps { get; set; } = 15;
-        public HumanDetectionResult LastDetectionResult => _lastResult;
-
-        public RealTimeDetectionService(ChannelReader<SKBitmap> frameReader, IObjectDetectionService detector)
+        public RealTimeDetectionService(ICameraService camera, IFrameDispatcherService dispatcher, IObjectDetectionService detector)
         {
-            _frameReader = frameReader ?? throw new ArgumentNullException(nameof(frameReader));
-            _detector = detector ?? throw new ArgumentNullException(nameof(detector));
+            _camera = camera;
+            _dispatcher = dispatcher;
+            _detector = detector;
+
+            _dispatcher.OnFrameForAi += async (s, frame) =>
+            {
+                if (!IsDetecting) return;
+                try
+                {
+                    using var copy = frame.Copy();
+                    var result = await _detector.DetectAsync(copy);
+                    OnPersonDetected?.Invoke(this, result);
+                    OnFrameProcessed?.Invoke(this, result);
+                    CountFps();
+                }
+                catch (Exception ex)
+                {
+                    OnDetectionError?.Invoke(this, ex);
+                }
+            };
         }
 
         public async Task StartRealTimeDetectionAsync(CancellationToken ct = default)
         {
-            lock (_lockObject)
-            {
-                if (IsDetecting || _disposed) return;
+            if (IsDetecting) return;
+            OnStatusChanged?.Invoke(this, DetectionStatus.Starting);
 
-                IsDetecting = true;
-                _processedFrames = 0;
-                _lastFpsUpdate = DateTime.Now;
-            }
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-            var linkedCt = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token).Token;
+            if (!_camera.IsInitialized) await _camera.InitializeAsync(_cts.Token);
+            await _detector.InitializeAsync(_cts.Token);
 
-            OnStatusChanged?.Invoke(this, "Detection started");
+            _ = _dispatcher.StartFrameDispatchAsync(_camera.GetFrameStream(_cts.Token), _cts.Token);
 
-            _processingTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await foreach (var frame in _frameReader.ReadAllAsync(linkedCt))
-                    {
-                        if (linkedCt.IsCancellationRequested || _disposed)
-                        {
-                            frame?.Dispose();
-                            break;
-                        }
-
-                        await ProcessFrameAsync(frame, linkedCt);
-                        UpdateFps();
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // 
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Detection error: {ex.Message}");
-                    OnDetectionError?.Invoke(this, $"Detection error: {ex.Message}");
-                }
-                finally
-                {
-                    lock (_lockObject)
-                    {
-                        IsDetecting = false;
-                    }
-                    OnStatusChanged?.Invoke(this, "Detection stopped");
-                }
-            }, linkedCt);
-
-            await Task.Yield(); 
-        }
-
-        private async Task ProcessFrameAsync(SKBitmap frame, CancellationToken ct)
-        {
-            if (frame == null || frame.IsNull) return;
-
-            try
-            {
-                var startTime = DateTime.Now;
-                var result = await _detector.DetectPersonAsync(frame, ct);
-                var processingTime = DateTime.Now - startTime;
-
-                _lastResult = result;
-
-                // событие детекции
-                OnPersonDetected?.Invoke(this, result);
-
-                // Регулировкафпс
-                if (TargetFps > 0)
-                {
-                    var targetFrameTime = TimeSpan.FromMilliseconds(1000.0 / TargetFps);
-                    var remainingTime = targetFrameTime - processingTime;
-
-                    if (remainingTime > TimeSpan.Zero)
-                    {
-                        await Task.Delay(remainingTime, ct);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Frame processing error: {ex.Message}");
-                OnDetectionError?.Invoke(this, $"Frame processing error: {ex.Message}");
-            }
-            finally
-            {
-                frame?.Dispose();
-            }
-        }
-
-        private void UpdateFps()
-        {
-            _processedFrames++;
-            var now = DateTime.Now;
-            var elapsed = (now - _lastFpsUpdate).TotalSeconds;
-
-            if (elapsed >= 1.0)
-            {
-                _currentFps = _processedFrames / elapsed;
-                _processedFrames = 0;
-                _lastFpsUpdate = now;
-            }
+            IsDetecting = true;
+            OnStatusChanged?.Invoke(this, DetectionStatus.Running);
         }
 
         public async Task StopRealTimeDetectionAsync()
         {
-            lock (_lockObject)
-            {
-                if (!IsDetecting) return;
-                _cts.Cancel();
-            }
+            if (!IsDetecting) return;
+            OnStatusChanged?.Invoke(this, DetectionStatus.Stopping);
 
-            if (_processingTask != null)
-            {
-                try
-                {
-                    await _processingTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) { }
-                _processingTask = null;
-            }
+            _cts?.Cancel();
+            await _dispatcher.StopFrameDispatchAsync();
+            await _camera.StopAsync();
 
-            _cts.TryReset(); 
+            IsDetecting = false;
+            _currentFps = 0;
+
+            OnStatusChanged?.Invoke(this, DetectionStatus.Stopped);
+        }
+
+        private void CountFps()
+        {
+            _frames++;
+            var now = DateTime.UtcNow;
+            if ((now - _last).TotalSeconds >= 1)
+            {
+                _currentFps = _frames / (now - _last).TotalSeconds;
+                _frames = 0;
+                _last = now;
+            }
         }
 
         public void Dispose()
         {
-            if (_disposed) return;
-
-            _disposed = true;
-            _ = StopRealTimeDetectionAsync();
-            _cts.Dispose();
+            _cts?.Cancel();
+            _detector?.Dispose();
         }
     }
 }
-#endif

@@ -1,161 +1,201 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
-		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net8.0-tizen</TargetFrameworks> -->
+    <PropertyGroup>
+        <TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
 
-		<!-- Note for MacCatalyst:
-		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
+        <OutputType>Exe</OutputType>
+        <RootNamespace>Presentation</RootNamespace>
+        <UseMaui>true</UseMaui>
+        <SingleProject>true</SingleProject>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
 
-		<OutputType>Exe</OutputType>
-		<RootNamespace>Presentation</RootNamespace>
-		<UseMaui>true</UseMaui>
-		<SingleProject>true</SingleProject>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
+        <!-- Display name -->
+        <ApplicationTitle>Person Detector</ApplicationTitle>
 
-		<!-- Display name -->
-		<ApplicationTitle>Presentation</ApplicationTitle>
+        <!-- App Identifier -->
+        <ApplicationId>com.companyname.persondetector</ApplicationId>
 
-		<!-- App Identifier -->
-		<ApplicationId>com.companyname.presentation</ApplicationId>
+        <!-- Versions -->
+        <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+        <ApplicationVersion>1</ApplicationVersion>
 
-		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">14.2</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">14.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">26.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+        <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
+        
+        <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        
+        <!-- Android Specific -->
+        <AndroidEnableProfiler>true</AndroidEnableProfiler>
+        <AndroidEnablePreloadAssemblies>true</AndroidEnablePreloadAssemblies>
+        <AndroidUseDefaultAotProfile>true</AndroidUseDefaultAotProfile>
+        
+        <!-- iOS Specific -->
+        <MtouchLink Condition="'$(TargetFramework)' == 'net9.0-ios'">Full</MtouchLink>
+        <MtouchUseLlvm Condition="'$(TargetFramework)' == 'net9.0-ios'">True</MtouchUseLlvm>
+        <EnableSGenConc Condition="'$(TargetFramework)' == 'net9.0-ios'">True</EnableSGenConc>
+        <BuildIpa Condition="'$(TargetFramework)' == 'net9.0-ios'">True</BuildIpa>
+        <IpaIncludeArtwork Condition="'$(TargetFramework)' == 'net9.0-ios'">True</IpaIncludeArtwork>
+        
+        <!-- Warning Level -->
+        <WarningLevel>4</WarningLevel>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    </PropertyGroup>
 
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">11.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">13.1</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
-		<EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-	</PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+        <DebugType>portable</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+        <Optimize>false</Optimize>
+    </PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-ios|AnyCPU'">
-	  <MtouchLink>Full</MtouchLink>
-	  <MtouchUseLlvm>True</MtouchUseLlvm>
-	  <EnableSGenConc>True</EnableSGenConc>
-	  <BuildIpa>True</BuildIpa>
-	  <IpaIncludeArtwork>True</IpaIncludeArtwork>
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)'=='Release'">
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <Optimize>true</Optimize>
+    </PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-ios|AnyCPU'">
-	  <EnableSGenConc>True</EnableSGenConc>
-	  <BuildIpa>True</BuildIpa>
-	  <IpaIncludeArtwork>True</IpaIncludeArtwork>
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+    <ItemGroup>
+        <!-- App Icon -->
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-android|AnyCPU'">
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+        <!-- Splash Screen -->
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-android|AnyCPU'">
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+        <!-- Images -->
+        <MauiImage Include="Resources\Images\*" />
+        <MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-windows10.0.19041.0|AnyCPU'">
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+        <!-- Custom Fonts -->
+        <MauiFont Include="Resources\Fonts\*" />
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net9.0-windows10.0.19041.0|AnyCPU'">
-	  <WarningLevel>8</WarningLevel>
-	</PropertyGroup>
+        <!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
+        <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
 
-	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+    <!-- Include platform-specific files properly -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
+       
+        <AndroidResource Include="Platforms\Android\Resources\**\*" />
+        <PackageReference Include="Xamarin.AndroidX.Camera.Core">
+          <Version>1.4.2.3</Version>
+        </PackageReference>
+        <PackageReference Include="Xamarin.AndroidX.Camera.Lifecycle">
+          <Version>1.4.2.3</Version>
+        </PackageReference>
+        <PackageReference Include="Xamarin.TensorFlow.Lite">
+          <Version>2.16.1.7</Version>
+        </PackageReference>
+        <PackageReference Include="Xamarin.TensorFlow.Lite.Gpu">
+          <Version>2.16.1.7</Version>
+        </PackageReference>
+    </ItemGroup>
 
-		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-ios'">
+        <Compile Include="Platforms\iOS\**\*.cs" />
+        <BundleResource Include="Platforms\iOS\Resources\**\*" />
+    </ItemGroup>
 
-		<!-- Images -->
-		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-maccatalyst'">
+        <Compile Include="Platforms\MacCatalyst\**\*.cs" />
+    </ItemGroup>
 
-		<!-- Custom Fonts -->
-		<MauiFont Include="Resources\Fonts\*" />
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows10.0.19041.0'">
+        <Compile Include="Platforms\Windows\**\*.cs" />
+    </ItemGroup>
 
-		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-	</ItemGroup>
-	<ItemGroup>
-		<MauiAsset Include="Resources\Raw\**" />
-	</ItemGroup>
-	<ItemGroup>
-	  <AndroidResource Remove="Platforms\Android\Java\**" />
-	  <AndroidResource Remove="Platforms\Windows\**" />
-	  <Compile Remove="Platforms\Android\Java\**" />
-	  <Compile Remove="Platforms\Windows\**" />
-	  <EmbeddedResource Remove="Platforms\Android\Java\**" />
-	  <EmbeddedResource Remove="Platforms\Windows\**" />
-	  <MauiCss Remove="Platforms\Android\Java\**" />
-	  <MauiCss Remove="Platforms\Windows\**" />
-	  <MauiXaml Remove="Platforms\Android\Java\**" />
-	  <MauiXaml Remove="Platforms\Windows\**" />
-	  <None Remove="Platforms\Android\Java\**" />
-	  <None Remove="Platforms\Windows\**" />
-	</ItemGroup>
-	
+    <ItemGroup>
+        <ProjectReference Include="..\Domain\Domain.csproj" />
+        <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
+        <ProjectReference Include="..\AppUseCase\AppUseCase.csproj" />
+    </ItemGroup>
 
-	<ItemGroup>
-	  <AndroidResource Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
-	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="..\Domain\Domain.csproj" />
-		<ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
-		<ProjectReference Include="..\AppUseCase\AppUseCase.csproj" />
-	</ItemGroup>
-	<ItemGroup>
-	  <None Remove="Platforms\Android\Resources\Layouts\activity_ar.xml" />
-	</ItemGroup>
+    <!-- Common Package References -->
 
-	
-	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.110" />
-		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.110" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.9" />
-		<PackageReference Include="SkiaSharp" Version="3.119.0" />
-		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.0" />
-		<PackageReference Include="SkiaSharp.Views.Maui.Core" Version="3.119.0" />
-		<PackageReference Include="TensorFlow.NET" Version="0.150.0" />
-	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Platforms\Android\Resources\Layouts\" />
-	</ItemGroup>
-	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
-	  <PackageReference Include="Xamarin.AndroidX.Camera.Lifecycle">
-	    <Version>1.4.2.3</Version>
-	  </PackageReference>
-	  <PackageReference Include="Xamarin.TensorFlow.Lite">
-	    <Version>2.16.1.7</Version>
-	  </PackageReference>
-	  <PackageReference Include="Xamarin.TensorFlow.Lite.Gpu">
-	    <Version>2.16.1.7</Version>
-	  </PackageReference>
-	</ItemGroup>
-	<ItemGroup>
-	  <Compile Update="Services\ObjectDetectionService.cs">
-	    <ExcludeFromCurrentConfiguration>false</ExcludeFromCurrentConfiguration>
-	  </Compile>
-	</ItemGroup>
-	<ItemGroup>
-	  <MauiXaml Update="Views\CharacterPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Views\MainPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	</ItemGroup>
+
+    
+    <!-- Add TensorFlow Lite model as embedded resource -->
+    <ItemGroup>
+        <EmbeddedResource Include="Resources\Raw\*.tflite">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="Resources\Raw\*.txt">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <!-- Android Permissions -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-android'">
+        <AssemblyAttribute Include="Android.App.UsesPermission">
+            <_Parameter1>Android.Manifest.Permission.Camera</_Parameter1>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="Android.App.UsesPermission">
+            <_Parameter1>Android.Manifest.Permission.WriteExternalStorage</_Parameter1>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="Android.App.UsesPermission">
+            <_Parameter1>Android.Manifest.Permission.ReadExternalStorage</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <!-- iOS Permissions -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-ios'">
+        <BundleResource Include="Resources\Raw\*.tflite" />
+        <BundleResource Include="Resources\Raw\*.txt" />
+    </ItemGroup>
+    <ItemGroup>
+      <AndroidResource Remove="Platforms\Android\Java\**" />
+      <AndroidResource Remove="Platforms\Android\Resources\Layouts\**" />
+      <AndroidResource Remove="Platforms\iOS\**" />
+      <AndroidResource Remove="Platforms\MacCatalyst\**" />
+      <AndroidResource Remove="Platforms\Tizen\**" />
+      <AndroidResource Remove="Platforms\Windows\**" />
+      <Compile Remove="Platforms\Android\Java\**" />
+      <Compile Remove="Platforms\Android\Resources\Layouts\**" />
+      <Compile Remove="Platforms\iOS\**" />
+      <Compile Remove="Platforms\MacCatalyst\**" />
+      <Compile Remove="Platforms\Tizen\**" />
+      <Compile Remove="Platforms\Windows\**" />
+      <EmbeddedResource Remove="Platforms\Android\Java\**" />
+      <EmbeddedResource Remove="Platforms\Android\Resources\Layouts\**" />
+   
+      <EmbeddedResource Remove="Platforms\iOS\**" />
+      <EmbeddedResource Remove="Platforms\MacCatalyst\**" />
+      <EmbeddedResource Remove="Platforms\Tizen\**" />
+      <EmbeddedResource Remove="Platforms\Windows\**" />
+      <MauiCss Remove="Platforms\Android\Java\**" />
+      <MauiCss Remove="Platforms\Android\Resources\Layouts\**" />
+      <MauiCss Remove="Platforms\iOS\**" />
+      <MauiCss Remove="Platforms\MacCatalyst\**" />
+      <MauiCss Remove="Platforms\Tizen\**" />
+      <MauiCss Remove="Platforms\Windows\**" />
+      <MauiXaml Remove="Platforms\Android\Java\**" />
+      <MauiXaml Remove="Platforms\Android\Resources\Layouts\**" />
+      <MauiXaml Remove="Platforms\iOS\**" />
+      <MauiXaml Remove="Platforms\MacCatalyst\**" />
+      <MauiXaml Remove="Platforms\Tizen\**" />
+      <MauiXaml Remove="Platforms\Windows\**" />
+      <None Remove="Platforms\Android\Java\**" />
+      <None Remove="Platforms\Android\Resources\Layouts\**" />
+      <None Remove="Platforms\iOS\**" />
+      <None Remove="Platforms\MacCatalyst\**" />
+      <None Remove="Platforms\Tizen\**" />
+      <None Remove="Platforms\Windows\**" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+      <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+      <PackageReference Include="SkiaSharp" Version="3.119.1" />
+      <PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.1" />
+      <PackageReference Include="SkiaSharp.Views.Maui.Core" Version="3.119.1" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Update="Microsoft.Maui.Controls" Version="9.0.110" />
+    </ItemGroup>
+
+
 </Project>
